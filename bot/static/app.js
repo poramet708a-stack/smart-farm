@@ -657,7 +657,30 @@ async function deleteSeasonLog(logId) {
 }
 
 async function renderPlotsPage(plotId) {
-  // Lazy load supplementary data
+  // ── Resolve plotId and update buttons SYNCHRONOUSLY before any awaits ──
+  if (!plotId || !allPlots.find(p => p.plot_id === plotId))
+    plotId = (currentPlotId && allPlots.find(p => p.plot_id === currentPlotId))
+             ? currentPlotId
+             : (activePlots()[0] || allPlots[0])?.plot_id;
+  currentPlotId = plotId || null;
+
+  const active = activePlots();
+  const btnContainer = document.getElementById('plot-buttons');
+  if (btnContainer) {
+    btnContainer.innerHTML = active.map(p =>
+      `<button class="plot-btn${p.plot_id === plotId ? ' active' : ''}"
+               data-plot-id="${p.plot_id}"
+               onclick="selectPlot('${p.plot_id}')">${p.plot_name}</button>`
+    ).join('');
+  }
+
+  const container = document.getElementById('plot-content');
+  if (!plotId) {
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีแปลง — กด "➕ เพิ่มแปลง" เพื่อเริ่ม</p>';
+    return;
+  }
+
+  // ── Lazy load supplementary data (after buttons are already correct) ──
   if (!Object.keys(yieldEstimates).length) {
     try { yieldEstimates = await fetch(`${API}/api/yields`).then(r => r.json()); }
     catch { yieldEstimates = {}; }
@@ -669,30 +692,6 @@ async function renderPlotsPage(plotId) {
   if (!allHarvestSessions.length) {
     try { allHarvestSessions = await fetch(`${API}/api/harvest-sessions`).then(r => r.json()); }
     catch { allHarvestSessions = []; }
-  }
-
-  // Determine selected plot (prefer current, fall back to first active then first any)
-  if (!plotId || !allPlots.find(p => p.plot_id === plotId))
-    plotId = (currentPlotId && allPlots.find(p => p.plot_id === currentPlotId))
-             ? currentPlotId
-             : (activePlots()[0] || allPlots[0])?.plot_id;
-  currentPlotId = plotId || null;
-
-  const container = document.getElementById('plot-content');
-
-  // Build selector — active plots only (harvested plots live in เก็บเกี่ยว tab)
-  const active = activePlots();
-  const btnContainer = document.getElementById('plot-buttons');
-  if (btnContainer) {
-    btnContainer.innerHTML = active.map(p =>
-      `<button class="plot-btn${p.plot_id === plotId ? ' active' : ''}"
-               onclick="selectPlot('${p.plot_id}')">${p.plot_name}</button>`
-    ).join('');
-  }
-
-  if (!plotId) {
-    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีแปลง — กด "➕ เพิ่มแปลง" เพื่อเริ่ม</p>';
-    return;
   }
 
   const plot = allPlots.find(p => p.plot_id === plotId);
@@ -832,6 +831,10 @@ async function renderPlotsPage(plotId) {
 
 function selectPlot(plotId) {
   currentPlotId = plotId;
+  // Update button active state immediately (sync) before async render
+  document.querySelectorAll('#plot-buttons .plot-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.plotId === plotId)
+  );
   renderPlotsPage(plotId);
 }
 
