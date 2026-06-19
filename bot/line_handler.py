@@ -35,21 +35,32 @@ def _reply(api: MessagingApi, reply_token: str, text: str, qr: QuickReply | None
     ))
 
 
+def _get_source_id(event) -> str:
+    """ได้ group_id ถ้าอยู่ในกลุ่ม หรือ user_id ถ้าแชทส่วนตัว"""
+    source = event.source
+    if hasattr(source, 'group_id') and source.group_id:
+        return source.group_id
+    if hasattr(source, 'room_id') and source.room_id:
+        return source.room_id
+    return source.user_id
+
+
 def handle_message(event, api: MessagingApi):
-    user_id = event.source.user_id
-    token   = event.reply_token
+    user_id   = event.source.user_id
+    source_id = _get_source_id(event)
+    token     = event.reply_token
 
     if isinstance(event.message, ImageMessageContent):
-        _handle_image(event, api, user_id, token)
+        _handle_image(event, api, user_id, source_id, token)
     elif isinstance(event.message, TextMessageContent):
-        _handle_text(event, api, user_id, token, event.message.text.strip())
+        _handle_text(event, api, user_id, source_id, token, event.message.text.strip())
 
 
 # ---------------------------------------------------------------------------
 # Image flow
 # ---------------------------------------------------------------------------
 
-def _handle_image(event, api: MessagingApi, user_id: str, token: str):
+def _handle_image(event, api: MessagingApi, user_id: str, source_id: str, token: str):
     image_id = event.message.id
     _reply(api, token, "📷 กำลังอ่านรูปอยู่นะครับ รอแป๊บนึง...")
 
@@ -57,14 +68,12 @@ def _handle_image(event, api: MessagingApi, user_id: str, token: str):
 
     if amount is not None:
         user_states[user_id] = {'step': 'waiting_type', 'amount': amount, 'image_id': image_id}
-        # Need a push since reply token already used above — but we used reply already
-        # Use push to send the follow-up question
-        _push(api, user_id,
+        _push(api, source_id,
               f"📄 อ่านได้ยอด {amount:,.0f} บาทครับ\nรายการนี้คืออะไรครับ?",
               _qr('💸 รายจ่าย', '💰 รายรับ'))
     else:
         user_states[user_id] = {'step': 'waiting_amount', 'amount': None, 'image_id': image_id}
-        _push(api, user_id,
+        _push(api, source_id,
               "📄 อ่านรูปได้แล้วครับ แต่หายอดเงินไม่เจอ\nพิมพ์ตัวเลขยอดเงินได้เลยครับ เช่น 1200")
 
 
@@ -79,7 +88,7 @@ def _push(api: MessagingApi, user_id: str, text: str, qr: QuickReply | None = No
 # Text / state machine
 # ---------------------------------------------------------------------------
 
-def _handle_text(event, api: MessagingApi, user_id: str, token: str, text: str):
+def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: str, text: str):
     state = user_states.get(user_id, {})
     step  = state.get('step')
 
@@ -162,8 +171,7 @@ def _handle_text(event, api: MessagingApi, user_id: str, token: str, text: str):
                 recorded_by = recorder,
             )
             user_states.pop(user_id, None)
-            _reply(api, token, f"✅ บันทึกแล้วครับ ({txn_id})\nรอผู้อนุมัติตรวจสอบนะครับ")
-            _notify_approver(api, txn_id, state, recorder)
+            _reply(api, token, f"✅ บันทึกแล้วครับ ({txn_id})")
         elif 'ยกเลิก' in text:
             user_states.pop(user_id, None)
             _reply(api, token, "❌ ยกเลิกแล้วครับ")
