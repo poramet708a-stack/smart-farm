@@ -28,6 +28,7 @@ let currentDayDate = null;
 // plot modal state
 let editingPlotId  = null;
 let currentPlotId  = null;
+let currentPlotIdx = -1;  // index in activePlots() — used for button active state
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -656,7 +657,7 @@ async function deleteSeasonLog(logId) {
   renderPlotsPage(currentPlotId);
 }
 
-async function renderPlotsPage(plotId) {
+async function renderPlotsPage(plotId, plotIdx) {
   // ── Resolve plotId and update buttons SYNCHRONOUSLY before any awaits ──
   if (!plotId || !allPlots.find(p => p.plot_id === plotId))
     plotId = (currentPlotId && allPlots.find(p => p.plot_id === currentPlotId))
@@ -665,16 +666,16 @@ async function renderPlotsPage(plotId) {
   currentPlotId = plotId || null;
 
   const active = activePlots();
+  // Index is always unique even if plot_ids have duplicates
+  currentPlotIdx = (plotIdx !== undefined && plotIdx >= 0)
+    ? plotIdx
+    : active.findIndex(p => p.plot_id === plotId);
   const btnContainer = document.getElementById('plot-buttons');
   if (btnContainer) {
-    btnContainer.innerHTML = active.map(p =>
-      `<button class="plot-btn" data-plot-id="${p.plot_id}"
-               onclick="selectPlot('${p.plot_id}')">${p.plot_name}</button>`
+    btnContainer.innerHTML = active.map((p, i) =>
+      `<button class="plot-btn${i === currentPlotIdx ? ' active' : ''}"
+               onclick="selectPlot('${p.plot_id}', ${i})">${p.plot_name}</button>`
     ).join('');
-    // Set active separately to avoid any string-comparison quirk in template literal
-    btnContainer.querySelectorAll('.plot-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.plotId === String(plotId))
-    );
   }
 
   const container = document.getElementById('plot-content');
@@ -832,13 +833,14 @@ async function renderPlotsPage(plotId) {
   }
 }   // end renderPlotsPage
 
-function selectPlot(plotId) {
-  currentPlotId = plotId;
-  // Update button active state immediately (sync) before async render
-  document.querySelectorAll('#plot-buttons .plot-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.plotId === plotId)
+function selectPlot(plotId, idx) {
+  currentPlotId  = plotId;
+  currentPlotIdx = idx ?? activePlots().findIndex(p => p.plot_id === plotId);
+  // Update button active state by index (never wrong even if plot_ids are duplicated)
+  document.querySelectorAll('#plot-buttons .plot-btn').forEach((b, i) =>
+    b.classList.toggle('active', i === currentPlotIdx)
   );
-  renderPlotsPage(plotId);
+  renderPlotsPage(plotId, currentPlotIdx);
 }
 
 async function deleteTxnOnPlots(txnId) {

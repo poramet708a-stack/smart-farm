@@ -47,8 +47,14 @@ def _sheet(name: str) -> gspread.Worksheet:
 
 
 def _next_id(prefix: str, ws: gspread.Worksheet) -> str:
-    count = len(ws.get_all_values())  # includes header row
-    return f'{prefix}-{count:04d}'
+    max_n = 0
+    for row in ws.get_all_values()[1:]:  # skip header
+        if row and str(row[0]).startswith(f'{prefix}-'):
+            try:
+                max_n = max(max_n, int(row[0][len(prefix) + 1:]))
+            except (ValueError, IndexError):
+                pass
+    return f'{prefix}-{max_n + 1:04d}'
 
 
 # ---------------------------------------------------------------------------
