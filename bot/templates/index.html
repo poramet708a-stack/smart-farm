@@ -24,6 +24,7 @@
   <button class="tab-btn"        data-page="page-plots">🌱 รายแปลง</button>
   <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
   <button class="tab-btn"        data-page="page-analysis">📐 วิเคราะห์</button>
+  <button class="tab-btn"        data-page="page-calendar">📅 ปฏิทิน</button>
 </nav>
 
 <main class="content">
@@ -64,7 +65,15 @@
 
   <!-- Page 2: Per Plot -->
   <section id="page-plots" class="page">
-    <div id="plot-buttons" class="plot-select"></div>
+    <div class="plot-toolbar">
+      <div id="plot-buttons" class="plot-select"></div>
+      <button class="btn-new-plot" onclick="openPlotModal()">➕ เพิ่มแปลง</button>
+    </div>
+
+    <div class="plot-header-row">
+      <div class="plot-detail-name" id="plot-name"></div>
+      <div class="plot-actions" id="plot-actions"></div>
+    </div>
 
     <div class="cards">
       <div class="card">
@@ -101,6 +110,17 @@
       <div class="card profit">
         <div class="label">✅ กำไร</div>
         <div class="value" id="plot-profit">—</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">📌 สถานะ</div>
+        <div class="value" style="font-size:1rem" id="plot-status">—</div>
+      </div>
+      <div class="card">
+        <div class="label">📝 หมายเหตุ</div>
+        <div class="value" style="font-size:0.85rem" id="plot-notes-text">—</div>
       </div>
     </div>
 
@@ -144,6 +164,26 @@
     </div>
   </section>
 
+  <!-- Page 5: Calendar -->
+  <section id="page-calendar" class="page">
+    <div class="cal-toolbar">
+      <select id="cal-plot-filter" class="cal-plot-sel">
+        <option value="">ทุกแปลง</option>
+      </select>
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+        <span class="cal-month" id="cal-title">—</span>
+        <button class="cal-nav-btn" onclick="calNext()">›</button>
+      </div>
+    </div>
+    <div class="cal-legend">
+      <span><span class="cal-dot income" style="display:inline-block;vertical-align:middle"></span> รายรับ</span>
+      <span><span class="cal-dot expense" style="display:inline-block;vertical-align:middle"></span> รายจ่าย</span>
+      <span><span style="font-size:0.75rem">📝</span> บันทึก</span>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+  </section>
+
 </main>
 
 <!-- Modal: เพิ่มรายการ -->
@@ -177,6 +217,68 @@
       <div class="form-actions">
         <button type="button" class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
         <button type="submit" class="btn-save" id="btn-save">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: วันในปฏิทิน -->
+<div id="day-modal" class="modal-overlay" onclick="closeDayModal(event)">
+  <div class="modal">
+    <h2 id="day-modal-date"></h2>
+    <div id="day-txn-list" class="day-txn-list"></div>
+    <div class="form-row" style="margin-top:14px">
+      <label>📝 บันทึกกิจกรรมวันนี้</label>
+      <textarea id="day-note-input" rows="3"
+        placeholder="เช่น ฉีดยา, รดน้ำ, ตัดหญ้า..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-cancel" onclick="closeDayModal()">ปิด</button>
+      <button type="button" class="btn-save" id="day-save-btn" onclick="saveDayNote()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: เพิ่ม/แก้ไขแปลง -->
+<div id="plot-modal" class="modal-overlay" onclick="closePlotModal(event)">
+  <div class="modal">
+    <h2 id="plot-modal-title">➕ เพิ่มแปลงใหม่</h2>
+    <form id="plot-form" onsubmit="submitPlot(event)">
+      <div class="form-row">
+        <label>ชื่อแปลง</label>
+        <input id="pf-name" type="text" placeholder="เช่น แปลงข้าว A" required>
+      </div>
+      <div class="form-row">
+        <label>พืชที่ปลูก</label>
+        <input id="pf-crop" type="text" placeholder="เช่น ข้าว, มันสำปะหลัง" required>
+      </div>
+      <div class="form-row">
+        <label>พื้นที่ (ไร่)</label>
+        <input id="pf-area" type="number" min="0.1" step="0.5" placeholder="เช่น 5" required>
+      </div>
+      <div class="form-row">
+        <label>วันที่ปลูก</label>
+        <input id="pf-start" type="date" required>
+      </div>
+      <div class="form-row">
+        <label>วันเก็บเกี่ยว (ประมาณ)</label>
+        <input id="pf-harvest" type="date" required>
+      </div>
+      <div class="form-row">
+        <label>สถานะ</label>
+        <select id="pf-status">
+          <option value="กำลังปลูก">กำลังปลูก</option>
+          <option value="เก็บเกี่ยวแล้ว">เก็บเกี่ยวแล้ว</option>
+          <option value="หยุดพัก">หยุดพัก</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>หมายเหตุ (ไม่บังคับ)</label>
+        <input id="pf-notes" type="text" placeholder="เช่น ดินชื้น, ใกล้คลอง">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closePlotModal()">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="plot-save-btn">บันทึก</button>
       </div>
     </form>
   </div>

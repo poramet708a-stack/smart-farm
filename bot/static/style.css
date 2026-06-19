@@ -16,8 +16,23 @@ body {
   align-items: center;
   gap: 12px;
 }
-.header h1 { font-size: 1.3rem; font-weight: 700; }
+.header h1  { font-size: 1.3rem; font-weight: 700; }
 .header .sub { font-size: 0.85rem; opacity: 0.8; }
+
+.btn-add {
+  margin-left: auto;
+  background: #fff;
+  color: #2e7d32;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.btn-add:hover { background: #e8f5e9; }
 
 /* Nav tabs */
 .tabs {
@@ -28,11 +43,11 @@ body {
   padding: 0 16px;
 }
 .tab-btn {
-  padding: 14px 20px;
+  padding: 14px 18px;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: #666;
   border-bottom: 3px solid transparent;
   white-space: nowrap;
@@ -46,7 +61,6 @@ body {
 
 /* Main content */
 .content { padding: 20px 16px; max-width: 900px; margin: 0 auto; }
-
 .page { display: none; }
 .page.active { display: block; }
 
@@ -55,7 +69,7 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 .card {
   background: #fff;
@@ -70,7 +84,7 @@ body {
 .card.expense .value { color: #c62828; }
 .card.profit .value  { color: #1565c0; }
 
-/* Chart container */
+/* Chart */
 .chart-box {
   background: #fff;
   border-radius: 12px;
@@ -90,35 +104,19 @@ body {
   margin-bottom: 20px;
 }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-th {
-  background: #f5f5f5;
-  padding: 10px 12px;
-  text-align: left;
-  font-weight: 600;
-  white-space: nowrap;
-}
+th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
 td { padding: 10px 12px; border-top: 1px solid #f0f0f0; }
 tr:hover td { background: #fafafa; }
 
-/* Badge */
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-.badge.approved  { background: #e8f5e9; color: #2e7d32; }
-.badge.pending   { background: #fff8e1; color: #f57f17; }
-.badge.rejected  { background: #ffebee; color: #c62828; }
-
 /* Plot selector */
-.plot-select {
+.plot-toolbar {
   display: flex;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
+.plot-select { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
 .plot-btn {
   padding: 8px 16px;
   border: 2px solid #c8e6c9;
@@ -127,31 +125,45 @@ tr:hover td { background: #fafafa; }
   cursor: pointer;
   font-size: 0.9rem;
   font-family: inherit;
-  transition: all .15s;
 }
-.plot-btn.active {
+.plot-btn.active { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+
+.btn-new-plot {
+  padding: 8px 16px;
   background: #2e7d32;
   color: #fff;
-  border-color: #2e7d32;
-}
-
-/* Loading */
-.loading { text-align: center; padding: 40px; color: #aaa; }
-
-/* Add button in header */
-.btn-add {
-  margin-left: auto;
-  background: #fff;
-  color: #2e7d32;
   border: none;
   border-radius: 20px;
-  padding: 8px 16px;
   font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
   font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
 }
-.btn-add:hover { background: #e8f5e9; }
+.btn-new-plot:hover { background: #1b5e20; }
+
+.plot-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.plot-detail-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #2e7d32;
+  flex: 1;
+}
+.plot-actions { display: flex; gap: 8px; }
+.btn-edit-plot, .btn-del-plot {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.btn-edit-plot { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+.btn-del-plot  { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
 
 /* Delete button in table */
 .btn-del {
@@ -166,7 +178,100 @@ tr:hover td { background: #fafafa; }
 }
 .btn-del:hover { background: #ffebee; }
 
-/* Modal */
+/* Break-even */
+.breakeven { background: #e3f2fd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.breakeven h3 { color: #1565c0; margin-bottom: 8px; font-size: 0.95rem; }
+.breakeven p  { margin: 4px 0; }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: #aaa; }
+
+/* ===== Calendar ===== */
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cal-plot-sel {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  flex: 1;
+  max-width: 200px;
+}
+.cal-nav { display: flex; align-items: center; gap: 10px; }
+.cal-nav-btn {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 34px; height: 34px;
+  font-size: 1.3rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.cal-nav-btn:hover { background: #f5f5f5; }
+.cal-month { font-size: 1rem; font-weight: 700; min-width: 140px; text-align: center; }
+
+.cal-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 0.82rem;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.cal-day-name {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #888;
+  padding: 6px 0;
+  font-weight: 600;
+}
+.cal-day {
+  min-height: 62px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.cal-day:hover { background: #f1f8e9; }
+.cal-day.today { border-color: #2e7d32; background: #f9fff9; }
+.cal-day.other-month { opacity: 0.2; pointer-events: none; }
+.cal-day-num { font-size: 0.82rem; font-weight: 600; color: #333; }
+.cal-dots { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+.cal-dot { width: 7px; height: 7px; border-radius: 50%; }
+.cal-dot.income  { background: #66bb6a; }
+.cal-dot.expense { background: #ef5350; }
+.cal-note-preview { font-size: 0.65rem; color: #888; margin-top: 2px; line-height: 1.2; overflow: hidden; }
+
+/* Day detail in modal */
+.day-txn-list { max-height: 200px; overflow-y: auto; }
+.day-txn-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  gap: 8px;
+}
+.day-no-txn { color: #aaa; text-align: center; padding: 16px; font-size: 0.9rem; }
+
+/* ===== Modals ===== */
 .modal-overlay {
   display: none;
   position: fixed;
@@ -175,6 +280,7 @@ tr:hover td { background: #fafafa; }
   z-index: 100;
   align-items: center;
   justify-content: center;
+  padding: 16px;
 }
 .modal-overlay.open { display: flex; }
 
@@ -182,21 +288,19 @@ tr:hover td { background: #fafafa; }
   background: #fff;
   border-radius: 16px;
   padding: 24px;
-  width: 90%;
-  max-width: 420px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,.2);
 }
 .modal h2 { font-size: 1.1rem; margin-bottom: 20px; color: #2e7d32; }
 
-.form-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 14px;
-}
+.form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
 .form-row label { font-size: 0.85rem; color: #666; font-weight: 600; }
 .form-row select,
-.form-row input {
+.form-row input,
+.form-row textarea {
   padding: 10px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -205,13 +309,11 @@ tr:hover td { background: #fafafa; }
   width: 100%;
 }
 .form-row select:focus,
-.form-row input:focus { outline: none; border-color: #2e7d32; }
+.form-row input:focus,
+.form-row textarea:focus { outline: none; border-color: #2e7d32; }
+.form-row textarea { resize: vertical; }
 
-.form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
-}
+.form-actions { display: flex; gap: 10px; margin-top: 20px; }
 .btn-cancel {
   flex: 1;
   padding: 12px;
@@ -236,18 +338,9 @@ tr:hover td { background: #fafafa; }
 }
 .btn-save:disabled { background: #aaa; cursor: default; }
 
-/* Break-even box */
-.breakeven {
-  background: #e3f2fd;
-  border-radius: 12px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.breakeven h3 { color: #1565c0; margin-bottom: 8px; font-size: 0.95rem; }
-.breakeven p  { margin: 4px 0; }
-
 @media (max-width: 480px) {
   .header h1 { font-size: 1.1rem; }
-  .tab-btn   { padding: 12px 14px; font-size: 0.85rem; }
+  .tab-btn   { padding: 12px 12px; font-size: 0.82rem; }
   .card .value { font-size: 1.2rem; }
+  .cal-day { min-height: 50px; }
 }

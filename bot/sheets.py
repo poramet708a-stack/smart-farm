@@ -127,6 +127,71 @@ def save_harvest(plot_id: str, quantity_kg: float, price_per_kg: float, buyer: s
 
 
 # ---------------------------------------------------------------------------
+# Plot CRUD
+# ---------------------------------------------------------------------------
+
+def save_plot(plot_name: str, crop_type: str, area_rai: float,
+              start_date: str, expected_harvest: str) -> str:
+    ws  = _sheet('plots')
+    pid = _next_id('PLOT', ws)
+    ws.append_row([pid, plot_name, crop_type, area_rai,
+                   start_date, expected_harvest, 'กำลังปลูก', ''])
+    logger.info(f'เพิ่มแปลง {pid}')
+    return pid
+
+
+def update_plot(plot_id: str, plot_name: str, crop_type: str, area_rai: float,
+               start_date: str, expected_harvest: str, status: str, notes: str):
+    ws   = _sheet('plots')
+    cell = ws.find(plot_id, in_column=1)
+    if not cell:
+        logger.warning(f'ไม่พบแปลง {plot_id}')
+        return
+    ws.update(f'B{cell.row}:H{cell.row}',
+              [[plot_name, crop_type, area_rai, start_date, expected_harvest, status, notes]])
+    logger.info(f'อัปเดตแปลง {plot_id}')
+
+
+def delete_plot(plot_id: str):
+    ws   = _sheet('plots')
+    cell = ws.find(plot_id, in_column=1)
+    if not cell:
+        logger.warning(f'ไม่พบแปลง {plot_id}')
+        return
+    ws.delete_rows(cell.row)
+    logger.info(f'ลบแปลง {plot_id}')
+
+
+# ---------------------------------------------------------------------------
+# Activities (calendar notes)
+# ---------------------------------------------------------------------------
+
+def _ensure_sheet(name: str, headers: list) -> gspread.Worksheet:
+    ss = _client().open_by_key(os.environ['GOOGLE_SHEETS_ID'])
+    try:
+        return ss.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = ss.add_worksheet(title=name, rows=1000, cols=len(headers))
+        ws.append_row(headers)
+        return ws
+
+
+def get_activities() -> list[dict]:
+    ws = _ensure_sheet('activities', ['date', 'note'])
+    return ws.get_all_records()
+
+
+def save_activity(date: str, note: str):
+    ws     = _ensure_sheet('activities', ['date', 'note'])
+    values = ws.get_all_values()
+    for i, row in enumerate(values[1:], start=2):
+        if row and row[0] == date:
+            ws.update_cell(i, 2, note)
+            return
+    ws.append_row([date, note])
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

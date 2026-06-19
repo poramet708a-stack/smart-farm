@@ -1,12 +1,25 @@
 const API = '';
 
-let allPlots = [];
+let allPlots        = [];
 let allTransactions = [];
-let allHarvest = [];
-let charts = {};
+let allHarvest      = [];
+let allActivities   = [];
+let charts          = {};
 
 const EXPENSE_CATS = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ'];
 const INCOME_CATS  = ['ขายข้าว', 'ขายมัน', 'ขายข้าวโพด', 'อื่นๆ'];
+const MONTH_TH     = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                      'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const DAY_TH       = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+
+// calendar state
+let calYear        = new Date().getFullYear();
+let calMonth       = new Date().getMonth();
+let calPlotFilter  = '';
+let currentDayDate = null;
+
+// plot modal state
+let editingPlotId  = null;
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -20,14 +33,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [plots, txns, harvest] = await Promise.all([
+  const [plots, txns, harvest, acts] = await Promise.all([
     fetch(`${API}/api/plots`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/transactions`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/harvest`).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/activities`).then(r => r.json()).catch(() => []),
   ]);
   allPlots        = plots;
   allTransactions = txns;
   allHarvest      = harvest;
+  allActivities   = acts;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,6 +60,7 @@ function setupTabs() {
       if (page === 'page-plots')    renderPlots();
       if (page === 'page-harvest')  renderHarvest();
       if (page === 'page-analysis') renderAnalysis();
+      if (page === 'page-calendar') renderCalendarPage();
     });
   });
 }
@@ -55,14 +71,12 @@ function setupTabs() {
 function renderOverview() {
   const month     = new Date().toISOString().slice(0, 7);
   const thisMonth = allTransactions.filter(r => (r.date || '').startsWith(month));
-
-  const income  = sum(thisMonth, 'รายรับ');
-  const expense = sum(thisMonth, 'รายจ่าย');
-  const profit  = income - expense;
+  const income    = sum(thisMonth, 'รายรับ');
+  const expense   = sum(thisMonth, 'รายจ่าย');
 
   setText('ov-income',  fmt(income));
   setText('ov-expense', fmt(expense));
-  setText('ov-profit',  fmt(profit));
+  setText('ov-profit',  fmt(income - expense));
   setText('ov-count',   thisMonth.length);
 
   renderMonthlyChart(allTransactions);
@@ -79,8 +93,7 @@ function renderMonthlyChart(txns) {
   const months   = lastNMonths(6);
   const incomes  = months.map(m => sum(txns.filter(r => r.date?.startsWith(m)), 'รายรับ'));
   const expenses = months.map(m => sum(txns.filter(r => r.date?.startsWith(m)), 'รายจ่าย'));
-
-  const ctx = document.getElementById('chart-monthly')?.getContext('2d');
+  const ctx      = document.getElementById('chart-monthly')?.getContext('2d');
   if (!ctx) return;
   if (charts.monthly) charts.monthly.destroy();
   charts.monthly = new Chart(ctx, {
@@ -104,8 +117,8 @@ function renderPlots() {
   container.innerHTML = '';
   allPlots.forEach((p, i) => {
     const btn = document.createElement('button');
-    btn.className = 'plot-btn' + (i === 0 ? ' active' : '');
-    btn.textContent = p.plot_name;
+    btn.className    = 'plot-btn' + (i === 0 ? ' active' : '');
+    btn.textContent  = p.plot_name;
     btn.dataset.plotId = p.plot_id;
     btn.addEventListener('click', () => {
       document.querySelectorAll('.plot-btn').forEach(b => b.classList.remove('active'));
@@ -115,6 +128,10 @@ function renderPlots() {
     container.appendChild(btn);
   });
   if (allPlots.length) renderPlotDetail(allPlots[0].plot_id);
+  else {
+    document.getElementById('plot-actions').innerHTML = '';
+    setText('plot-name', '');
+  }
 }
 
 function renderPlotDetail(plotId) {
@@ -124,22 +141,28 @@ function renderPlotDetail(plotId) {
   const income  = sum(txns, 'รายรับ');
   const area    = parseFloat(plot?.area_rai) || 1;
 
-  setText('plot-name',         plot?.plot_name || '');
-  setText('plot-crop',         plot?.crop_type || '');
+  setText('plot-name',         plot?.plot_name       || '');
+  setText('plot-crop',         plot?.crop_type        || '—');
   setText('plot-area',         `${area} ไร่`);
-  setText('plot-start',        plot?.start_date || '-');
-  setText('plot-harvest-date', plot?.expected_harvest || '-');
+  setText('plot-start',        plot?.start_date       || '—');
+  setText('plot-harvest-date', plot?.expected_harvest || '—');
   setText('plot-cost',         fmt(expense));
   setText('plot-cost-rai',     fmt(expense / area));
   setText('plot-income',       fmt(income));
   setText('plot-profit',       fmt(income - expense));
+  setText('plot-status',       plot?.status           || '—');
+  setText('plot-notes-text',   plot?.notes            || '—');
+
+  document.getElementById('plot-actions').innerHTML = `
+    <button class="btn-edit-plot" onclick="openPlotModal('${plotId}')">✏️ แก้ไข</button>
+    <button class="btn-del-plot"  onclick="deletePlotConfirm('${plotId}')">🗑️ ลบ</button>
+  `;
 
   const catMap = {};
   txns.filter(r => r.type === 'รายจ่าย').forEach(r => {
     catMap[r.category] = (catMap[r.category] || 0) + parseFloat(r.amount);
   });
   renderDoughnut('chart-category', Object.keys(catMap), Object.values(catMap));
-
   renderTxnTable('plot-txn-table', txns.slice(-20).reverse());
 }
 
@@ -149,14 +172,11 @@ function renderPlotDetail(plotId) {
 function renderHarvest() {
   const tbody = document.querySelector('#harvest-table tbody');
   tbody.innerHTML = '';
-
   allHarvest.forEach(h => {
     const plot   = allPlots.find(p => p.plot_id === h.plot_id);
-    const txns   = allTransactions.filter(r => r.plot_id === h.plot_id);
-    const cost   = sum(txns, 'รายจ่าย');
+    const cost   = sum(allTransactions.filter(r => r.plot_id === h.plot_id), 'รายจ่าย');
     const profit = parseFloat(h.total_revenue) - cost;
-
-    const tr = document.createElement('tr');
+    const tr     = document.createElement('tr');
     tr.innerHTML = `
       <td>${plot?.plot_name || h.plot_id}</td>
       <td>${h.harvest_date}</td>
@@ -168,7 +188,6 @@ function renderHarvest() {
     `;
     tbody.appendChild(tr);
   });
-
   if (!allHarvest.length) {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการเก็บเกี่ยว</td></tr>';
   }
@@ -180,35 +199,224 @@ function renderHarvest() {
 function renderAnalysis() {
   const container = document.getElementById('analysis-content');
   container.innerHTML = '';
-
   allPlots.forEach(p => {
     const txns    = allTransactions.filter(r => r.plot_id === p.plot_id);
     const expense = sum(txns, 'รายจ่าย');
     const area    = parseFloat(p.area_rai) || 1;
-
-    const yieldMap = { 'ข้าว': 500, 'มันสำปะหลัง': 3500, 'ข้าวโพด': 800 };
-    const estYield = (yieldMap[p.crop_type] || 500) * area;
-    const breakEvenPrice = estYield > 0 ? expense / estYield : 0;
-
-    const box = document.createElement('div');
+    const yMap    = { 'ข้าว': 500, 'มันสำปะหลัง': 3500, 'ข้าวโพด': 800 };
+    const est     = (yMap[p.crop_type] || 500) * area;
+    const box     = document.createElement('div');
     box.className = 'breakeven';
     box.innerHTML = `
       <h3>📐 ${p.plot_name} (${p.crop_type}, ${area} ไร่)</h3>
       <p>💸 ต้นทุนรวม: <strong>${fmt(expense)} บาท</strong></p>
-      <p>📦 ประมาณการผลผลิต: <strong>${fmt(estYield)} กก.</strong></p>
-      <p>⚖️ ราคาขายขั้นต่ำคุ้มทุน: <strong>${fmt(breakEvenPrice)} บาท/กก.</strong></p>
+      <p>📦 ประมาณการผลผลิต: <strong>${fmt(est)} กก.</strong></p>
+      <p>⚖️ ราคาขายขั้นต่ำคุ้มทุน: <strong>${fmt(est > 0 ? expense / est : 0)} บาท/กก.</strong></p>
       <p>🌾 ต้นทุนต่อไร่: <strong>${fmt(expense / area)} บาท/ไร่</strong></p>
     `;
     container.appendChild(box);
   });
-
-  if (!allPlots.length) {
+  if (!allPlots.length)
     container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
-  }
 }
 
 // ---------------------------------------------------------------------------
-// Modal: เพิ่มรายการ
+// Page 5: Calendar
+// ---------------------------------------------------------------------------
+function renderCalendarPage() {
+  const sel = document.getElementById('cal-plot-filter');
+  sel.innerHTML = '<option value="">ทุกแปลง</option>' +
+    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+  sel.value    = calPlotFilter;
+  sel.onchange = () => { calPlotFilter = sel.value; renderCalendar(); };
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const monthStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+  setText('cal-title', `${MONTH_TH[calMonth]} ${calYear + 543}`);
+
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+
+  DAY_TH.forEach(d => {
+    const el = document.createElement('div');
+    el.className = 'cal-day-name';
+    el.textContent = d;
+    grid.appendChild(el);
+  });
+
+  const firstDay    = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const today       = new Date().toISOString().slice(0, 10);
+
+  for (let i = 0; i < firstDay; i++)
+    grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day other-month' }));
+
+  const txns = allTransactions.filter(r => {
+    return (r.date || '').startsWith(monthStr) &&
+           (!calPlotFilter || r.plot_id === calPlotFilter);
+  });
+  const dayMap = {};
+  txns.forEach(r => {
+    const d = (r.date || '').slice(0, 10);
+    if (!dayMap[d]) dayMap[d] = { income: 0, expense: 0 };
+    if (r.type === 'รายรับ')  dayMap[d].income  += parseFloat(r.amount || 0);
+    if (r.type === 'รายจ่าย') dayMap[d].expense += parseFloat(r.amount || 0);
+  });
+  const actMap = {};
+  allActivities.forEach(a => { if (a.note) actMap[a.date] = a.note; });
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds  = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const el  = document.createElement('div');
+    el.className = 'cal-day' + (ds === today ? ' today' : '');
+
+    let html = `<div class="cal-day-num">${day}</div>`;
+    const d  = dayMap[ds];
+    if (d) {
+      html += '<div class="cal-dots">';
+      if (d.income)  html += '<span class="cal-dot income"></span>';
+      if (d.expense) html += '<span class="cal-dot expense"></span>';
+      html += '</div>';
+    }
+    if (actMap[ds])
+      html += `<div class="cal-note-preview">${actMap[ds].slice(0, 12)}</div>`;
+
+    el.innerHTML = html;
+    el.addEventListener('click', () => openDayModal(ds));
+    grid.appendChild(el);
+  }
+}
+
+function calPrev() { if (--calMonth < 0)  { calMonth = 11; calYear--; } renderCalendar(); }
+function calNext() { if (++calMonth > 11) { calMonth = 0;  calYear++; } renderCalendar(); }
+
+function openDayModal(dateStr) {
+  currentDayDate = dateStr;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  setText('day-modal-date', `${d} ${MONTH_TH[m - 1]} ${y + 543}`);
+
+  const txns = allTransactions.filter(r =>
+    (r.date || '').slice(0, 10) === dateStr &&
+    (!calPlotFilter || r.plot_id === calPlotFilter)
+  );
+  const listEl = document.getElementById('day-txn-list');
+  if (!txns.length) {
+    listEl.innerHTML = '<p class="day-no-txn">ไม่มีรายการวันนี้</p>';
+  } else {
+    listEl.innerHTML = txns.map(r => {
+      const plot  = allPlots.find(p => p.plot_id === r.plot_id);
+      const color = r.type === 'รายรับ' ? '#2e7d32' : '#c62828';
+      return `<div class="day-txn-item">
+        <span>${plot?.plot_name || r.plot_id} · ${r.category}</span>
+        <span style="color:${color};font-weight:700">${r.type === 'รายจ่าย' ? '-' : '+'}${fmt(r.amount)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('day-note-input').value =
+    allActivities.find(a => a.date === dateStr)?.note || '';
+  document.getElementById('day-modal').classList.add('open');
+}
+
+function closeDayModal(e) {
+  if (!e || e.target === document.getElementById('day-modal'))
+    document.getElementById('day-modal').classList.remove('open');
+}
+
+async function saveDayNote() {
+  if (!currentDayDate) return;
+  const note = document.getElementById('day-note-input').value.trim();
+  const btn  = document.getElementById('day-save-btn');
+  btn.disabled = true;
+  try {
+    await fetch(`${API}/api/activities`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: currentDayDate, note }),
+    });
+    const idx = allActivities.findIndex(a => a.date === currentDayDate);
+    if (idx >= 0) allActivities[idx].note = note;
+    else if (note) allActivities.push({ date: currentDayDate, note });
+    closeDayModal();
+    renderCalendar();
+  } catch { alert('บันทึกไม่ได้ ลองใหม่'); }
+  finally  { btn.disabled = false; }
+}
+
+// ---------------------------------------------------------------------------
+// Plot CRUD
+// ---------------------------------------------------------------------------
+function openPlotModal(plotId = null) {
+  editingPlotId = plotId;
+  setText('plot-modal-title', plotId ? '✏️ แก้ไขแปลง' : '➕ เพิ่มแปลงใหม่');
+  document.getElementById('plot-form').reset();
+  if (plotId) {
+    const p = allPlots.find(x => x.plot_id === plotId);
+    if (p) {
+      document.getElementById('pf-name').value    = p.plot_name        || '';
+      document.getElementById('pf-crop').value    = p.crop_type         || '';
+      document.getElementById('pf-area').value    = p.area_rai          || '';
+      document.getElementById('pf-start').value   = p.start_date        || '';
+      document.getElementById('pf-harvest').value = p.expected_harvest  || '';
+      document.getElementById('pf-status').value  = p.status            || 'กำลังปลูก';
+      document.getElementById('pf-notes').value   = p.notes             || '';
+    }
+  }
+  document.getElementById('plot-modal').classList.add('open');
+}
+
+function closePlotModal(e) {
+  if (!e || e.target === document.getElementById('plot-modal'))
+    document.getElementById('plot-modal').classList.remove('open');
+}
+
+async function submitPlot(e) {
+  e.preventDefault();
+  const btn  = document.getElementById('plot-save-btn');
+  btn.disabled = true;
+  const body = {
+    plot_name:        document.getElementById('pf-name').value,
+    crop_type:        document.getElementById('pf-crop').value,
+    area_rai:         document.getElementById('pf-area').value,
+    start_date:       document.getElementById('pf-start').value,
+    expected_harvest: document.getElementById('pf-harvest').value,
+    status:           document.getElementById('pf-status').value,
+    notes:            document.getElementById('pf-notes').value,
+  };
+  try {
+    if (editingPlotId) {
+      await fetch(`${API}/api/plots/${editingPlotId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      await fetch(`${API}/api/plots`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    closePlotModal();
+    await loadAll();
+    renderPlots();
+    populatePlotSelect();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; }
+}
+
+async function deletePlotConfirm(plotId) {
+  const plot = allPlots.find(p => p.plot_id === plotId);
+  if (!confirm(`ลบแปลง "${plot?.plot_name}" ใช่ไหมครับ?`)) return;
+  try {
+    await fetch(`${API}/api/plots/${plotId}`, { method: 'DELETE' });
+    await loadAll();
+    renderPlots();
+    populatePlotSelect();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+}
+
+// ---------------------------------------------------------------------------
+// Transaction modal
 // ---------------------------------------------------------------------------
 function openModal() {
   document.getElementById('modal-overlay').classList.add('open');
@@ -217,31 +425,26 @@ function openModal() {
 }
 
 function closeModal(e) {
-  if (!e || e.target === document.getElementById('modal-overlay')) {
+  if (!e || e.target === document.getElementById('modal-overlay'))
     document.getElementById('modal-overlay').classList.remove('open');
-  }
 }
 
 function updateCategories() {
   const type = document.getElementById('f-type').value;
-  const cats = type === 'รายจ่าย' ? EXPENSE_CATS : INCOME_CATS;
   const sel  = document.getElementById('f-category');
+  const cats = type === 'รายจ่าย' ? EXPENSE_CATS : INCOME_CATS;
   sel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
 }
 
 function populatePlotSelect() {
-  const sel = document.getElementById('f-plot');
-  sel.innerHTML = allPlots.map(p =>
-    `<option value="${p.plot_id}">${p.plot_name}</option>`
-  ).join('');
+  document.getElementById('f-plot').innerHTML =
+    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
 }
 
 async function submitTxn(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-save');
-  btn.disabled = true;
-  btn.textContent = 'กำลังบันทึก...';
-
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
   const body = {
     type:        document.getElementById('f-type').value,
     category:    document.getElementById('f-category').value,
@@ -249,29 +452,19 @@ async function submitTxn(e) {
     plot_id:     document.getElementById('f-plot').value,
     recorded_by: document.getElementById('f-by').value || 'เว็บ',
   };
-
   try {
-    const res = await fetch(`${API}/api/transactions`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
-    const data = await res.json();
+    const data = await fetch(`${API}/api/transactions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
     closeModal();
     await loadAll();
     renderOverview();
     alert(`✅ บันทึกแล้วครับ (${data.txn_id})`);
-  } catch {
-    alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'บันทึก';
-  }
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
 }
 
-// ---------------------------------------------------------------------------
-// Delete transaction
-// ---------------------------------------------------------------------------
 async function deleteTxn(txnId) {
   if (!confirm(`ลบรายการ ${txnId} ใช่ไหมครับ?`)) return;
   try {
@@ -280,57 +473,43 @@ async function deleteTxn(txnId) {
     renderOverview();
     const active = document.querySelector('.plot-btn.active');
     if (active) renderPlotDetail(active.dataset.plotId);
-  } catch {
-    alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
-  }
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 function sum(arr, type) {
-  return arr
-    .filter(r => !type || r.type === type)
-    .reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+  return arr.filter(r => !type || r.type === type)
+            .reduce((s, r) => s + parseFloat(r.amount || 0), 0);
 }
-
 function fmt(n) {
   return Number(n).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
-
 function setText(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = val;
+  const el = document.getElementById(id); if (el) el.textContent = val;
 }
-
 function lastNMonths(n) {
-  const months = [];
-  const d = new Date();
+  const d = new Date(), months = [];
   for (let i = n - 1; i >= 0; i--) {
     const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
     months.push(m.toISOString().slice(0, 7));
   }
   return months;
 }
-
 function shortMonth(ym) {
-  const [, m] = ym.split('-');
   const names = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-  return names[parseInt(m, 10) - 1];
+  return names[parseInt(ym.split('-')[1], 10) - 1];
 }
-
 function groupByPlot(txns) {
-  const map = {};
-  txns.forEach(r => { map[r.plot_id] = (map[r.plot_id] || 0) + parseFloat(r.amount); });
-  return map;
+  const m = {};
+  txns.forEach(r => { m[r.plot_id] = (m[r.plot_id] || 0) + parseFloat(r.amount); });
+  return m;
 }
-
 function topEntry(obj) {
-  const entries = Object.entries(obj);
-  if (!entries.length) return null;
-  return entries.sort((a, b) => b[1] - a[1])[0];
+  const e = Object.entries(obj);
+  return e.length ? e.sort((a, b) => b[1] - a[1])[0] : null;
 }
-
 function renderDoughnut(canvasId, labels, data) {
   const ctx = document.getElementById(canvasId)?.getContext('2d');
   if (!ctx) return;
@@ -338,14 +517,10 @@ function renderDoughnut(canvasId, labels, data) {
   const COLORS = ['#66bb6a','#ef5350','#42a5f5','#ffa726','#ab47bc','#26c6da'];
   charts[canvasId] = new Chart(ctx, {
     type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: COLORS.slice(0, labels.length) }],
-    },
+    data: { labels, datasets: [{ data, backgroundColor: COLORS.slice(0, labels.length) }] },
     options: { responsive: true, plugins: { legend: { position: 'right' } } },
   });
 }
-
 function renderTxnTable(tbodyId, txns) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -362,7 +537,6 @@ function renderTxnTable(tbodyId, txns) {
     `;
     tbody.appendChild(tr);
   });
-  if (!txns.length) {
+  if (!txns.length)
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการ</td></tr>';
-  }
 }

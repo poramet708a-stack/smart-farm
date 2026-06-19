@@ -73,6 +73,46 @@ def api_harvest():
     return jsonify(get_harvest())
 
 
+@app.route('/api/plots', methods=['POST'])
+def api_add_plot():
+    from bot.sheets import save_plot
+    d = request.get_json()
+    pid = save_plot(d['plot_name'], d['crop_type'], float(d['area_rai']),
+                    d['start_date'], d['expected_harvest'])
+    return jsonify({'plot_id': pid})
+
+
+@app.route('/api/plots/<plot_id>', methods=['PUT'])
+def api_update_plot(plot_id):
+    from bot.sheets import update_plot
+    d = request.get_json()
+    update_plot(plot_id, d['plot_name'], d['crop_type'], float(d['area_rai']),
+                d['start_date'], d['expected_harvest'],
+                d.get('status', 'กำลังปลูก'), d.get('notes', ''))
+    return jsonify({'ok': True})
+
+
+@app.route('/api/plots/<plot_id>', methods=['DELETE'])
+def api_delete_plot(plot_id):
+    from bot.sheets import delete_plot
+    delete_plot(plot_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/activities')
+def api_get_activities():
+    from bot.sheets import get_activities
+    return jsonify(get_activities())
+
+
+@app.route('/api/activities', methods=['POST'])
+def api_save_activity():
+    from bot.sheets import save_activity
+    d = request.get_json()
+    save_activity(d['date'], d['note'])
+    return jsonify({'ok': True})
+
+
 @app.route('/api/transactions', methods=['POST'])
 def api_add_transaction():
     from bot.sheets import save_transaction
