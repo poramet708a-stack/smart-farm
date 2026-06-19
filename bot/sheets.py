@@ -178,6 +178,111 @@ def _ensure_sheet(name: str, headers: list) -> gspread.Worksheet:
         return ws
 
 
+# ---------------------------------------------------------------------------
+# Harvest Sessions (multi-day)
+# ---------------------------------------------------------------------------
+
+_HSS_HDR = ['session_id','plot_id','start_date','end_date','status',
+            'expected_kg','total_kg','total_revenue','destination_type','destination_detail','notes']
+_HEN_HDR = ['entry_id','session_id','plot_id','date','kg','price_per_kg','notes']
+
+
+def get_harvest_sessions() -> list[dict]:
+    return _ensure_sheet('harvest_sessions', _HSS_HDR).get_all_records()
+
+
+def create_harvest_session(plot_id: str, start_date: str,
+                           expected_kg: float, notes: str = '') -> str:
+    ws  = _ensure_sheet('harvest_sessions', _HSS_HDR)
+    sid = _next_id('HSS', ws)
+    ws.append_row([sid, plot_id, start_date, '', 'กำลังเก็บ',
+                   expected_kg, 0, 0, '', '', notes])
+    return sid
+
+
+def close_harvest_session(session_id: str, end_date: str, destination_type: str,
+                          destination_detail: str, total_kg: float, total_revenue: float):
+    ws   = _ensure_sheet('harvest_sessions', _HSS_HDR)
+    cell = ws.find(session_id, in_column=1)
+    if not cell:
+        return
+    ws.update(f'D{cell.row}:J{cell.row}',
+              [[end_date, 'เสร็จแล้ว', '', total_kg, total_revenue,
+                destination_type, destination_detail]])
+
+
+def get_harvest_entries() -> list[dict]:
+    return _ensure_sheet('harvest_entries', _HEN_HDR).get_all_records()
+
+
+def add_harvest_entry(session_id: str, plot_id: str, date: str,
+                      kg: float, price_per_kg: float, notes: str = '') -> str:
+    ws  = _ensure_sheet('harvest_entries', _HEN_HDR)
+    eid = _next_id('HEN', ws)
+    ws.append_row([eid, session_id, plot_id, date, kg, price_per_kg, notes])
+    # update session totals
+    entries = [r for r in ws.get_all_records() if r.get('session_id') == session_id]
+    total_kg  = sum(float(r['kg']) for r in entries)
+    total_rev = sum(float(r['kg']) * float(r['price_per_kg']) for r in entries)
+    sw   = _ensure_sheet('harvest_sessions', _HSS_HDR)
+    sc   = sw.find(session_id, in_column=1)
+    if sc:
+        sw.update_cell(sc.row, 7, total_kg)
+        sw.update_cell(sc.row, 8, total_rev)
+    return eid
+
+
+def delete_harvest_entry(entry_id: str):
+    ws   = _ensure_sheet('harvest_entries', _HEN_HDR)
+    cell = ws.find(entry_id, in_column=1)
+    if cell:
+        ws.delete_rows(cell.row)
+
+
+# ---------------------------------------------------------------------------
+# Season Log
+# ---------------------------------------------------------------------------
+
+_SL_HDR = ['log_id','plot_id','season_name','start_date','end_date',
+           'fertilizer_cost','pesticide_cost','water_count','rain_count',
+           'problems','yield_kg','price_per_kg','notes']
+
+
+def get_season_logs() -> list[dict]:
+    return _ensure_sheet('season_log', _SL_HDR).get_all_records()
+
+
+def save_season_log(plot_id: str, data: dict) -> str:
+    ws  = _ensure_sheet('season_log', _SL_HDR)
+    lid = _next_id('SL', ws)
+    ws.append_row([
+        lid, plot_id,
+        data.get('season_name', ''),
+        data.get('start_date', ''),
+        data.get('end_date', ''),
+        float(data.get('fertilizer_cost', 0) or 0),
+        float(data.get('pesticide_cost',  0) or 0),
+        int(data.get('water_count', 0) or 0),
+        int(data.get('rain_count',  0) or 0),
+        data.get('problems', ''),
+        float(data.get('yield_kg',     0) or 0),
+        float(data.get('price_per_kg', 0) or 0),
+        data.get('notes', ''),
+    ])
+    return lid
+
+
+def delete_season_log(log_id: str):
+    ws   = _ensure_sheet('season_log', _SL_HDR)
+    cell = ws.find(log_id, in_column=1)
+    if cell:
+        ws.delete_rows(cell.row)
+
+
+# ---------------------------------------------------------------------------
+# Yield estimates (config)
+# ---------------------------------------------------------------------------
+
 def get_yield_estimates() -> dict:
     import json
     ws = _ensure_sheet('config', ['key', 'value'])

@@ -127,6 +127,89 @@ def api_save_yields():
     return jsonify({'ok': True})
 
 
+@app.route('/api/harvest-sessions')
+def api_get_harvest_sessions():
+    from bot.sheets import get_harvest_sessions
+    return jsonify(get_harvest_sessions())
+
+
+@app.route('/api/harvest-sessions', methods=['POST'])
+def api_create_harvest_session():
+    from bot.sheets import create_harvest_session
+    d = request.get_json()
+    sid = create_harvest_session(
+        plot_id     = d['plot_id'],
+        start_date  = d['start_date'],
+        expected_kg = float(d.get('expected_kg', 0)),
+        notes       = d.get('notes', ''),
+    )
+    return jsonify({'session_id': sid})
+
+
+@app.route('/api/harvest-sessions/<session_id>/close', methods=['POST'])
+def api_close_harvest_session(session_id):
+    from bot.sheets import close_harvest_session
+    d = request.get_json()
+    close_harvest_session(
+        session_id        = session_id,
+        end_date          = d['end_date'],
+        destination_type  = d.get('destination_type', ''),
+        destination_detail= d.get('destination_detail', ''),
+        total_kg          = float(d.get('total_kg', 0)),
+        total_revenue     = float(d.get('total_revenue', 0)),
+    )
+    return jsonify({'ok': True})
+
+
+@app.route('/api/harvest-entries')
+def api_get_harvest_entries():
+    from bot.sheets import get_harvest_entries
+    return jsonify(get_harvest_entries())
+
+
+@app.route('/api/harvest-entries', methods=['POST'])
+def api_add_harvest_entry():
+    from bot.sheets import add_harvest_entry
+    d = request.get_json()
+    eid = add_harvest_entry(
+        session_id  = d['session_id'],
+        plot_id     = d['plot_id'],
+        date        = d['date'],
+        kg          = float(d['kg']),
+        price_per_kg= float(d['price_per_kg']),
+        notes       = d.get('notes', ''),
+    )
+    return jsonify({'entry_id': eid})
+
+
+@app.route('/api/harvest-entries/<entry_id>', methods=['DELETE'])
+def api_delete_harvest_entry(entry_id):
+    from bot.sheets import delete_harvest_entry
+    delete_harvest_entry(entry_id)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/season-logs')
+def api_get_season_logs():
+    from bot.sheets import get_season_logs
+    return jsonify(get_season_logs())
+
+
+@app.route('/api/season-logs', methods=['POST'])
+def api_save_season_log():
+    from bot.sheets import save_season_log
+    d = request.get_json()
+    lid = save_season_log(d['plot_id'], d)
+    return jsonify({'log_id': lid})
+
+
+@app.route('/api/season-logs/<log_id>', methods=['DELETE'])
+def api_delete_season_log(log_id):
+    from bot.sheets import delete_season_log
+    delete_season_log(log_id)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/map')
 def api_get_map():
     from bot.sheets import get_map

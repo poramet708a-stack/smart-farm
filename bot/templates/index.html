@@ -22,6 +22,7 @@
   <button class="tab-btn active" data-page="page-overview">📊 ภาพรวม</button>
   <button class="tab-btn"        data-page="page-plots">🌱 รายแปลง</button>
   <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
+  <button class="tab-btn"        data-page="page-season">📓 ฤดูกาล</button>
   <button class="tab-btn"        data-page="page-analysis">📐 วิเคราะห์</button>
   <button class="tab-btn"        data-page="page-calendar">📅 ปฏิทิน</button>
 </nav>
@@ -167,35 +168,53 @@
 
   <!-- Page 3: Harvest -->
   <section id="page-harvest" class="page">
-    <div class="page-action-bar">
-      <span class="page-action-title">ประวัติการเก็บเกี่ยว</span>
-      <button class="btn-add-inline" onclick="openHarvestModal()">🚜 บันทึกการเก็บเกี่ยว</button>
-    </div>
     <div class="cards">
       <div class="card income">
-        <div class="label">💰 รายได้รวม</div>
+        <div class="label">💰 รายได้รวม (เสร็จแล้ว)</div>
         <div class="value" id="hrv-total-rev">—</div>
       </div>
       <div class="card">
         <div class="label">⚖️ ผลผลิตรวม</div>
         <div class="value" id="hrv-total-kg">—</div>
       </div>
-      <div class="card profit">
-        <div class="label">✅ กำไรสุทธิ</div>
-        <div class="value" id="hrv-total-profit">—</div>
+      <div class="card">
+        <div class="label">🌿 รอบที่กำลังเก็บ</div>
+        <div class="value" id="hrv-open-count">—</div>
       </div>
     </div>
+
+    <div class="page-action-bar">
+      <span class="page-action-title">🌿 กำลังดำเนินการ</span>
+      <button class="btn-add-inline" onclick="openHarvestSessionModal()">➕ เปิดรอบใหม่</button>
+    </div>
+    <div id="hrv-sessions-open"></div>
+
+    <div class="page-action-bar" style="margin-top:20px">
+      <span class="page-action-title">✅ เสร็จแล้ว</span>
+    </div>
     <div class="table-wrap">
-      <table id="harvest-table">
+      <table id="harvest-done-table">
         <thead>
           <tr>
-            <th>แปลง</th><th>วันเก็บ</th><th>ผลผลิต</th>
-            <th>ราคา/กก.</th><th>รายได้</th><th>ต้นทุน</th><th>กำไร</th>
+            <th>แปลง</th><th>วันที่เสร็จ</th><th>ผลผลิต</th>
+            <th>รายได้</th><th>ปลายทาง</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- Page 4: Season Log -->
+  <section id="page-season" class="page">
+    <div class="page-action-bar">
+      <span class="page-action-title">📓 บันทึกฤดูกาล</span>
+      <button class="btn-add-inline" onclick="openSeasonLogModal()">➕ เพิ่มบันทึก</button>
+    </div>
+    <p style="color:#888;font-size:0.85rem;margin-bottom:16px">
+      บันทึกข้อมูลสำคัญต่อแปลงต่อฤดู เพื่อวิเคราะห์และเปรียบเทียบในอนาคต
+    </p>
+    <div id="season-content"><div class="loading">กำลังโหลด...</div></div>
   </section>
 
   <!-- Page 4: Analysis -->
@@ -330,42 +349,173 @@
   </div>
 </div>
 
-<!-- Modal: บันทึกการเก็บเกี่ยว -->
-<div id="harvest-modal" class="modal-overlay" onclick="closeHarvestModal(event)">
+<!-- Modal: เปิดรอบการเก็บเกี่ยว -->
+<div id="hss-modal" class="modal-overlay" onclick="closeModal2('hss-modal',event)">
   <div class="modal">
-    <h2>🚜 บันทึกการเก็บเกี่ยว</h2>
-    <form id="harvest-form" onsubmit="submitHarvest(event)">
+    <h2>🌿 เปิดรอบการเก็บเกี่ยว</h2>
+    <form id="hss-form" onsubmit="submitHarvestSession(event)">
       <div class="form-row">
         <label>แปลง</label>
-        <select id="hf-plot" required></select>
+        <select id="hss-plot" required></select>
       </div>
       <div class="form-row">
-        <label>วันที่เก็บเกี่ยว</label>
-        <input id="hf-date" type="date" required>
+        <label>วันที่เริ่ม</label>
+        <input id="hss-start" type="date" required>
       </div>
       <div class="form-row">
-        <label>ผลผลิต (กก.)</label>
-        <input id="hf-kg" type="number" min="0.1" step="0.1" placeholder="เช่น 500" required>
-      </div>
-      <div class="form-row">
-        <label>ราคา / กก. (บาท)</label>
-        <input id="hf-price" type="number" min="0.01" step="0.01" placeholder="เช่น 8.50" required>
-      </div>
-      <div class="form-row" id="hf-preview-row" style="display:none">
-        <label>รายได้รวม</label>
-        <div id="hf-preview" style="font-size:1.1rem;font-weight:700;color:#2e7d32"></div>
-      </div>
-      <div class="form-row">
-        <label>ผู้รับซื้อ (ไม่บังคับ)</label>
-        <input id="hf-buyer" type="text" placeholder="เช่น โรงสีนายสมชาย">
+        <label>ผลผลิตที่คาดไว้ (กก.)</label>
+        <input id="hss-expected" type="number" min="1" step="1" placeholder="เช่น 1500" required>
       </div>
       <div class="form-row">
         <label>หมายเหตุ (ไม่บังคับ)</label>
-        <input id="hf-notes" type="text" placeholder="เช่น ข้าวชื้น">
+        <input id="hss-notes" type="text" placeholder="">
       </div>
       <div class="form-actions">
-        <button type="button" class="btn-cancel" onclick="closeHarvestModal()">ยกเลิก</button>
-        <button type="submit" class="btn-save" id="harvest-save-btn">บันทึก</button>
+        <button type="button" class="btn-cancel" onclick="closeModal2('hss-modal')">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="hss-save-btn">เปิดรอบ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: บันทึกรอบเก็บรายวัน -->
+<div id="hen-modal" class="modal-overlay" onclick="closeModal2('hen-modal',event)">
+  <div class="modal">
+    <h2>📦 บันทึกรอบเก็บวันนี้</h2>
+    <input type="hidden" id="hen-session-id">
+    <input type="hidden" id="hen-plot-id">
+    <form id="hen-form" onsubmit="submitHarvestEntry(event)">
+      <div class="form-row">
+        <label>วันที่</label>
+        <input id="hen-date" type="date" required>
+      </div>
+      <div class="form-row">
+        <label>ผลผลิตวันนี้ (กก.)</label>
+        <input id="hen-kg" type="number" min="0.1" step="0.1" placeholder="เช่น 300" required oninput="updateEntryPreview()">
+      </div>
+      <div class="form-row">
+        <label>ราคา / กก. (บาท)</label>
+        <input id="hen-price" type="number" min="0" step="0.01" placeholder="เช่น 8.50" oninput="updateEntryPreview()">
+      </div>
+      <div class="form-row" id="hen-preview-row" style="display:none">
+        <label>รายได้วันนี้</label>
+        <div id="hen-preview" style="font-size:1.1rem;font-weight:700;color:#2e7d32"></div>
+      </div>
+      <div class="form-row">
+        <label>หมายเหตุ (ไม่บังคับ)</label>
+        <input id="hen-notes" type="text" placeholder="เช่น ข้าวชื้นเล็กน้อย">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal2('hen-modal')">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="hen-save-btn">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: ปิดรอบการเก็บเกี่ยว -->
+<div id="hclose-modal" class="modal-overlay" onclick="closeModal2('hclose-modal',event)">
+  <div class="modal">
+    <h2>✅ ปิดรอบการเก็บเกี่ยว</h2>
+    <input type="hidden" id="hclose-session-id">
+    <input type="hidden" id="hclose-total-kg">
+    <input type="hidden" id="hclose-total-rev">
+    <form id="hclose-form" onsubmit="submitCloseSession(event)">
+      <div class="form-row">
+        <label>วันที่เสร็จ</label>
+        <input id="hclose-date" type="date" required>
+      </div>
+      <div class="form-row">
+        <label id="hclose-summary-label">ผลผลิตรวม</label>
+        <div id="hclose-summary" style="font-size:1rem;font-weight:700;color:#2e7d32;padding:8px 0"></div>
+      </div>
+      <div class="form-row">
+        <label>จัดการผลผลิต</label>
+        <select id="hclose-dest-type">
+          <option value="ขายตลาด">🛒 ขายตลาด</option>
+          <option value="ส่งโรงงาน">🏭 ส่งโรงงาน/โรงสี</option>
+          <option value="เก็บในโกดัง">🏠 เก็บในโกดัง</option>
+          <option value="อื่นๆ">📋 อื่นๆ</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>รายละเอียด (ไม่บังคับ)</label>
+        <input id="hclose-dest-detail" type="text" placeholder="เช่น โรงสีนายสมชาย, โกดังหลังบ้าน">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal2('hclose-modal')">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="hclose-save-btn">ปิดรอบ</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: บันทึกฤดูกาล -->
+<div id="season-modal" class="modal-overlay" onclick="closeModal2('season-modal',event)">
+  <div class="modal modal-wide">
+    <h2>📓 บันทึกฤดูกาล</h2>
+    <form id="season-form" onsubmit="submitSeasonLog(event)">
+      <div class="form-row">
+        <label>แปลง</label>
+        <select id="sl-plot" required></select>
+      </div>
+      <div class="form-row">
+        <label>ชื่อฤดูกาล</label>
+        <input id="sl-name" type="text" placeholder="เช่น ปี 2026 รอบที่ 1" required>
+      </div>
+      <div class="form-row">
+        <label>วันเริ่มปลูก</label>
+        <input id="sl-start" type="date">
+      </div>
+      <div class="form-row">
+        <label>วันเก็บเกี่ยวเสร็จ</label>
+        <input id="sl-end" type="date">
+      </div>
+      <div class="season-form-section">💊 ต้นทุนปัจจัยการผลิต</div>
+      <div class="form-row">
+        <label>ต้นทุนปุ๋ย (บาท)</label>
+        <input id="sl-fert" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>ต้นทุนยา/สารเคมี (บาท)</label>
+        <input id="sl-pest" type="number" min="0" placeholder="0">
+      </div>
+      <div class="season-form-section">🌧️ สภาพแวดล้อม</div>
+      <div class="form-row">
+        <label>จำนวนครั้งที่รดน้ำ</label>
+        <input id="sl-water" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>จำนวนครั้งที่ฝนตก</label>
+        <input id="sl-rain" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>ปัญหาที่พบ</label>
+        <div class="problem-tags" id="sl-problem-tags">
+          <label class="ptag"><input type="checkbox" value="โรคพืช"> โรคพืช</label>
+          <label class="ptag"><input type="checkbox" value="แมลงศัตรู"> แมลงศัตรู</label>
+          <label class="ptag"><input type="checkbox" value="ภัยแล้ง"> ภัยแล้ง</label>
+          <label class="ptag"><input type="checkbox" value="น้ำท่วม"> น้ำท่วม</label>
+          <label class="ptag"><input type="checkbox" value="ราคาตก"> ราคาตก</label>
+          <label class="ptag"><input type="checkbox" value="แรงงานขาด"> แรงงานขาด</label>
+        </div>
+      </div>
+      <div class="season-form-section">🌾 ผลผลิต</div>
+      <div class="form-row">
+        <label>ผลผลิตจริง (กก.)</label>
+        <input id="sl-yield" type="number" min="0" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>ราคาขายเฉลี่ย (บาท/กก.)</label>
+        <input id="sl-price" type="number" min="0" step="0.01" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>บันทึกเพิ่มเติม</label>
+        <textarea id="sl-notes" rows="3" placeholder="สิ่งที่ได้เรียนรู้, ปัญหา, แนวทางแก้ไข..."></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal2('season-modal')">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="sl-save-btn">บันทึก</button>
       </div>
     </form>
   </div>

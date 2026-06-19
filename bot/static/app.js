@@ -1,11 +1,14 @@
 const API = '';
 
-let allPlots        = [];
-let allTransactions = [];
-let allHarvest      = [];
-let allActivities   = [];
-let yieldEstimates  = {};
-let charts          = {};
+let allPlots            = [];
+let allTransactions     = [];
+let allHarvest          = [];
+let allActivities       = [];
+let yieldEstimates      = {};
+let allHarvestSessions  = [];
+let allHarvestEntries   = [];
+let allSeasonLogs       = [];
+let charts              = {};
 
 const EXPENSE_CATS = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ'];
 const INCOME_CATS  = ['ขายข้าว', 'ขายมัน', 'ขายข้าวโพด', 'อื่นๆ'];
@@ -35,18 +38,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [plots, txns, harvest, acts, yields] = await Promise.all([
+  const [plots, txns, harvest, acts, yields, sessions, entries] = await Promise.all([
     fetch(`${API}/api/plots`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/transactions`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/harvest`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/activities`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/yields`).then(r => r.json()).catch(() => ({})),
+    fetch(`${API}/api/harvest-sessions`).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/harvest-entries`).then(r => r.json()).catch(() => []),
   ]);
-  allPlots        = plots;
-  allTransactions = txns;
-  allHarvest      = harvest;
-  allActivities   = acts;
-  yieldEstimates  = yields;
+  allPlots           = plots;
+  allTransactions    = txns;
+  allHarvest         = harvest;
+  allActivities      = acts;
+  yieldEstimates     = yields;
+  allHarvestSessions = sessions;
+  allHarvestEntries  = entries;
 }
 
 // helper: normalize yieldEstimates entry → { kg, price }
@@ -71,6 +78,7 @@ function setupTabs() {
 
       if (page === 'page-plots')    renderPlots();
       if (page === 'page-harvest')  renderHarvest();
+      if (page === 'page-season')   renderSeasonPage();
       if (page === 'page-analysis') renderAnalysis();
       if (page === 'page-calendar') renderCalendarPage();
       if (page === 'page-map')      renderMapPage();
@@ -288,91 +296,303 @@ function renderPlotDetail(plotId) {
 }
 
 // ---------------------------------------------------------------------------
-// Page 3: Harvest
+// Page 3: Harvest (Session-based)
 // ---------------------------------------------------------------------------
 function renderHarvest() {
-  const totalRev    = allHarvest.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
-  const totalKg     = allHarvest.reduce((s, h) => s + parseFloat(h.quantity_kg   || 0), 0);
-  const totalExpense = sum(allTransactions, 'รายจ่าย');
-  setText('hrv-total-rev',    fmt(totalRev) + ' ฿');
-  setText('hrv-total-kg',     fmt(totalKg)  + ' กก.');
-  const profit = totalRev - totalExpense;
-  const profEl = document.getElementById('hrv-total-profit');
-  if (profEl) { profEl.textContent = fmt(profit) + ' ฿'; profEl.style.color = profit >= 0 ? '#2e7d32' : '#c62828'; }
+  const done    = allHarvestSessions.filter(s => s.status === 'เสร็จแล้ว');
+  const open    = allHarvestSessions.filter(s => s.status === 'กำลังเก็บ');
+  const totalRev = done.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
+  const totalKg  = done.reduce((s, h) => s + parseFloat(h.total_kg      || 0), 0);
 
-  const tbody = document.querySelector('#harvest-table tbody');
+  setText('hrv-total-rev',   fmt(totalRev) + ' ฿');
+  setText('hrv-total-kg',    fmt(totalKg)  + ' กก.');
+  setText('hrv-open-count',  open.length + ' รอบ');
+
+  // Open sessions
+  const openEl = document.getElementById('hrv-sessions-open');
+  if (!open.length) {
+    openEl.innerHTML = '<p style="color:#aaa;text-align:center;padding:20px">ไม่มีรอบที่กำลังดำเนินการ</p>';
+  } else {
+    openEl.innerHTML = open.map(s => {
+      const plot    = allPlots.find(p => p.plot_id === s.plot_id);
+      const entries = allHarvestEntries.filter(e => e.session_id === s.session_id);
+      const expKg   = parseFloat(s.expected_kg) || 0;
+      const doneKg  = parseFloat(s.total_kg)    || 0;
+      const pct     = expKg > 0 ? Math.min(Math.round(doneKg / expKg * 100), 100) : 0;
+      const barColor= pct < 50 ? '#90caf9' : pct < 80 ? '#66bb6a' : '#ffa726';
+
+      const entryRows = entries.length
+        ? entries.map(e => `
+            <div class="hen-row">
+              <span class="hen-date">${e.date}</span>
+              <span class="hen-kg">${fmt(e.kg)} กก.</span>
+              <span class="hen-price">${e.price_per_kg ? fmt(parseFloat(e.kg)*parseFloat(e.price_per_kg))+' ฿' : '—'}</span>
+              <span class="hen-note">${e.notes || ''}</span>
+            </div>`).join('')
+        : '<p style="color:#bbb;font-size:0.85rem;padding:8px 0">ยังไม่มีรอบเก็บ กด "บันทึกรอบเก็บ"</p>';
+
+      return `<div class="hss-card">
+        <div class="hss-head">
+          <span class="hss-plot">${plot?.plot_name || s.plot_id}</span>
+          <span class="hss-date">เริ่ม ${s.start_date}</span>
+        </div>
+        <div class="hss-progress-wrap">
+          <div class="hss-progress-bar" style="width:${pct}%;background:${barColor}"></div>
+        </div>
+        <div class="hss-progress-info">
+          <span>${fmt(doneKg)} / ${fmt(expKg)} กก. (${pct}%)</span>
+          <span>รายได้: ${fmt(parseFloat(s.total_revenue||0))} ฿</span>
+        </div>
+        <div class="hen-list">${entryRows}</div>
+        <div class="hss-actions">
+          <button class="btn-add-inline" onclick="openHarvestEntryModal('${s.session_id}','${s.plot_id}')">📦 บันทึกรอบเก็บ</button>
+          <button class="btn-close-session" onclick="openCloseSessionModal('${s.session_id}',${doneKg},${parseFloat(s.total_revenue||0)})">✅ ปิดรอบ</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Done sessions table
+  const tbody = document.querySelector('#harvest-done-table tbody');
   tbody.innerHTML = '';
-  allHarvest.forEach(h => {
-    const plot   = allPlots.find(p => p.plot_id === h.plot_id);
-    const cost   = sum(allTransactions.filter(r => r.plot_id === h.plot_id), 'รายจ่าย');
-    const profit = parseFloat(h.total_revenue) - cost;
-    const tr     = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${plot?.plot_name || h.plot_id}</td>
-      <td>${h.harvest_date}</td>
-      <td>${fmt(h.quantity_kg)} กก.</td>
-      <td>${fmt(h.price_per_kg)}</td>
-      <td>${fmt(h.total_revenue)}</td>
-      <td>${fmt(cost)}</td>
-      <td style="color:${profit >= 0 ? '#2e7d32' : '#c62828'}">${fmt(profit)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  if (!allHarvest.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการเก็บเกี่ยว กด "บันทึกการเก็บเกี่ยว" เพื่อเพิ่ม</td></tr>';
+  if (!done.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรอบที่เสร็จแล้ว</td></tr>';
+  } else {
+    done.forEach(s => {
+      const plot = allPlots.find(p => p.plot_id === s.plot_id);
+      const tr   = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${plot?.plot_name || s.plot_id}</td>
+        <td>${s.end_date || '—'}</td>
+        <td>${fmt(s.total_kg)} กก.</td>
+        <td class="amt-inc">${fmt(s.total_revenue)} ฿</td>
+        <td>${s.destination_type || '—'}${s.destination_detail ? ' · '+s.destination_detail : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
   }
 }
 
-function openHarvestModal() {
-  document.getElementById('harvest-modal').classList.add('open');
-  document.getElementById('harvest-form').reset();
-  document.getElementById('hf-date').value = new Date().toISOString().slice(0, 10);
-  document.getElementById('hf-plot').innerHTML =
+// ── Harvest Session Modal ──────────────────────────────────
+function openHarvestSessionModal() {
+  document.getElementById('hss-form').reset();
+  document.getElementById('hss-start').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('hss-plot').innerHTML =
     allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
-  document.getElementById('hf-preview-row').style.display = 'none';
-  ['hf-kg', 'hf-price'].forEach(id => {
-    document.getElementById(id).addEventListener('input', updateHarvestPreview);
-  });
+  document.getElementById('hss-modal').classList.add('open');
 }
-function updateHarvestPreview() {
-  const kg    = parseFloat(document.getElementById('hf-kg').value)    || 0;
-  const price = parseFloat(document.getElementById('hf-price').value) || 0;
-  const row   = document.getElementById('hf-preview-row');
-  if (kg && price) {
-    document.getElementById('hf-preview').textContent = fmt(kg * price) + ' ฿';
-    row.style.display = '';
-  } else { row.style.display = 'none'; }
-}
-function closeHarvestModal(e) {
-  if (!e || e.target === document.getElementById('harvest-modal'))
-    document.getElementById('harvest-modal').classList.remove('open');
-}
-async function submitHarvest(e) {
+async function submitHarvestSession(e) {
   e.preventDefault();
-  const btn = document.getElementById('harvest-save-btn');
+  const btn = document.getElementById('hss-save-btn');
   btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
   try {
-    await fetch(`${API}/api/harvest`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+    await fetch(`${API}/api/harvest-sessions`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        plot_id:      document.getElementById('hf-plot').value,
-        harvest_date: document.getElementById('hf-date').value,
-        quantity_kg:  document.getElementById('hf-kg').value,
-        price_per_kg: document.getElementById('hf-price').value,
-        buyer:        document.getElementById('hf-buyer').value,
-        notes:        document.getElementById('hf-notes').value,
+        plot_id:     document.getElementById('hss-plot').value,
+        start_date:  document.getElementById('hss-start').value,
+        expected_kg: document.getElementById('hss-expected').value,
+        notes:       document.getElementById('hss-notes').value,
       }),
     });
-    closeHarvestModal();
-    allHarvest = await fetch(`${API}/api/harvest`).then(r => r.json());
-    renderHarvest();
-    renderOverview();
+    closeModal2('hss-modal');
+    await reloadHarvest();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; btn.textContent = 'เปิดรอบ'; }
+}
+
+// ── Harvest Entry Modal ───────────────────────────────────
+function openHarvestEntryModal(sessionId, plotId) {
+  document.getElementById('hen-form').reset();
+  document.getElementById('hen-session-id').value = sessionId;
+  document.getElementById('hen-plot-id').value    = plotId;
+  document.getElementById('hen-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('hen-preview-row').style.display = 'none';
+  document.getElementById('hen-modal').classList.add('open');
+}
+function updateEntryPreview() {
+  const kg    = parseFloat(document.getElementById('hen-kg').value)    || 0;
+  const price = parseFloat(document.getElementById('hen-price').value) || 0;
+  const row   = document.getElementById('hen-preview-row');
+  if (kg && price) {
+    document.getElementById('hen-preview').textContent = fmt(kg * price) + ' ฿';
+    row.style.display = '';
+  } else row.style.display = 'none';
+}
+async function submitHarvestEntry(e) {
+  e.preventDefault();
+  const btn = document.getElementById('hen-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await fetch(`${API}/api/harvest-entries`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        session_id:  document.getElementById('hen-session-id').value,
+        plot_id:     document.getElementById('hen-plot-id').value,
+        date:        document.getElementById('hen-date').value,
+        kg:          document.getElementById('hen-kg').value,
+        price_per_kg:document.getElementById('hen-price').value || 0,
+        notes:       document.getElementById('hen-notes').value,
+      }),
+    });
+    closeModal2('hen-modal');
+    await reloadHarvest();
   } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
   finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
 }
 
+// ── Close Session Modal ───────────────────────────────────
+function openCloseSessionModal(sessionId, totalKg, totalRev) {
+  document.getElementById('hclose-form').reset();
+  document.getElementById('hclose-session-id').value = sessionId;
+  document.getElementById('hclose-total-kg').value   = totalKg;
+  document.getElementById('hclose-total-rev').value  = totalRev;
+  document.getElementById('hclose-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('hclose-summary').textContent =
+    `ผลผลิตรวม ${fmt(totalKg)} กก. · รายได้ ${fmt(totalRev)} ฿`;
+  document.getElementById('hclose-modal').classList.add('open');
+}
+async function submitCloseSession(e) {
+  e.preventDefault();
+  const btn = document.getElementById('hclose-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังปิดรอบ...';
+  try {
+    const sid = document.getElementById('hclose-session-id').value;
+    await fetch(`${API}/api/harvest-sessions/${sid}/close`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        end_date:          document.getElementById('hclose-date').value,
+        destination_type:  document.getElementById('hclose-dest-type').value,
+        destination_detail:document.getElementById('hclose-dest-detail').value,
+        total_kg:          document.getElementById('hclose-total-kg').value,
+        total_revenue:     document.getElementById('hclose-total-rev').value,
+      }),
+    });
+    closeModal2('hclose-modal');
+    await reloadHarvest();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; btn.textContent = 'ปิดรอบ'; }
+}
+
+async function reloadHarvest() {
+  [allHarvestSessions, allHarvestEntries] = await Promise.all([
+    fetch(`${API}/api/harvest-sessions`).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/harvest-entries`).then(r => r.json()).catch(() => []),
+  ]);
+  renderHarvest();
+  renderOverview();
+}
+
+// ── Generic modal closer ──────────────────────────────────
+function closeModal2(id, e) {
+  const el = document.getElementById(id);
+  if (!e || e.target === el) el.classList.remove('open');
+}
+
 // ---------------------------------------------------------------------------
-// Page 4: Analysis
+// Page 4: Season Log
+// ---------------------------------------------------------------------------
+async function renderSeasonPage() {
+  if (!allSeasonLogs.length) {
+    try { allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()); }
+    catch { allSeasonLogs = []; }
+  }
+
+  const el = document.getElementById('season-content');
+  if (!allPlots.length) {
+    el.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีแปลง</p>';
+    return;
+  }
+
+  el.innerHTML = allPlots.map(p => {
+    const logs = allSeasonLogs.filter(l => l.plot_id === p.plot_id);
+    const txns = allTransactions.filter(r => r.plot_id === p.plot_id);
+    const totalCost = sum(txns, 'รายจ่าย');
+    const fertCost  = sum(txns.filter(r => r.category === 'ค่าปุ๋ย'),    'รายจ่าย');
+    const pestCost  = sum(txns.filter(r => r.category === 'ค่ายาฆ่าแมลง' || r.category === 'ค่ายา'), 'รายจ่าย');
+
+    const logCards = logs.length
+      ? logs.map(l => {
+          const rev     = parseFloat(l.yield_kg || 0) * parseFloat(l.price_per_kg || 0);
+          const cost    = totalCost;
+          const profit  = rev - cost;
+          const problems= l.problems ? l.problems.split(',').filter(Boolean)
+            .map(pr => `<span class="prob-tag">${pr.trim()}</span>`).join('') : '—';
+          return `<div class="sl-card">
+            <div class="sl-card-head">
+              <strong>${l.season_name}</strong>
+              <span style="color:#888;font-size:0.8rem">${l.start_date} → ${l.end_date || 'ปัจจุบัน'}</span>
+              <button class="btn-del" onclick="deleteSeasonLog('${l.log_id}')">ลบ</button>
+            </div>
+            <div class="sl-grid">
+              <div class="sl-stat"><div class="sl-stat-l">🌾 ผลผลิต</div><strong>${fmt(l.yield_kg || 0)} กก.</strong></div>
+              <div class="sl-stat"><div class="sl-stat-l">💰 รายได้</div><strong class="amt-inc">${fmt(rev)} ฿</strong></div>
+              <div class="sl-stat"><div class="sl-stat-l">💊 ต้นทุนปุ๋ย</div><strong>${fmt(l.fertilizer_cost || 0)} ฿</strong></div>
+              <div class="sl-stat"><div class="sl-stat-l">🧪 ต้นทุนยา</div><strong>${fmt(l.pesticide_cost || 0)} ฿</strong></div>
+              <div class="sl-stat"><div class="sl-stat-l">💧 รดน้ำ</div><strong>${l.water_count || 0} ครั้ง</strong></div>
+              <div class="sl-stat"><div class="sl-stat-l">🌧️ ฝนตก</div><strong>${l.rain_count || 0} ครั้ง</strong></div>
+            </div>
+            <div style="margin-top:8px"><span style="font-size:0.8rem;color:#888">ปัญหาที่พบ: </span>${problems}</div>
+            ${l.notes ? `<div class="sl-notes">"${l.notes}"</div>` : ''}
+          </div>`;
+        }).join('')
+      : `<p style="color:#aaa;font-size:0.85rem;padding:12px 0">ยังไม่มีบันทึก กด "เพิ่มบันทึก" เพื่อเริ่มบันทึกฤดูกาลแรก</p>`;
+
+    return `<div class="sl-plot-block">
+      <div class="sl-plot-title">🌿 ${p.plot_name} · ${p.crop_type}</div>
+      ${logCards}
+    </div>`;
+  }).join('');
+}
+
+function openSeasonLogModal() {
+  document.getElementById('season-form').reset();
+  document.getElementById('sl-plot').innerHTML =
+    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+  document.querySelectorAll('#sl-problem-tags input').forEach(cb => cb.checked = false);
+  document.getElementById('season-modal').classList.add('open');
+}
+
+async function submitSeasonLog(e) {
+  e.preventDefault();
+  const btn = document.getElementById('sl-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  const problems = [...document.querySelectorAll('#sl-problem-tags input:checked')]
+    .map(cb => cb.value).join(',');
+  try {
+    await fetch(`${API}/api/season-logs`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        plot_id:       document.getElementById('sl-plot').value,
+        season_name:   document.getElementById('sl-name').value,
+        start_date:    document.getElementById('sl-start').value,
+        end_date:      document.getElementById('sl-end').value,
+        fertilizer_cost: document.getElementById('sl-fert').value  || 0,
+        pesticide_cost:  document.getElementById('sl-pest').value  || 0,
+        water_count:     document.getElementById('sl-water').value || 0,
+        rain_count:      document.getElementById('sl-rain').value  || 0,
+        problems,
+        yield_kg:        document.getElementById('sl-yield').value || 0,
+        price_per_kg:    document.getElementById('sl-price').value || 0,
+        notes:           document.getElementById('sl-notes').value,
+      }),
+    });
+    closeModal2('season-modal');
+    allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()).catch(() => []);
+    renderSeasonPage();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
+}
+
+async function deleteSeasonLog(logId) {
+  if (!confirm('ลบบันทึกฤดูกาลนี้?')) return;
+  await fetch(`${API}/api/season-logs/${logId}`, { method: 'DELETE' });
+  allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()).catch(() => []);
+  renderSeasonPage();
+}
+
+// ---------------------------------------------------------------------------
+// Page 5: Analysis
 // ---------------------------------------------------------------------------
 async function renderAnalysis() {
   if (!Object.keys(yieldEstimates).length) {
