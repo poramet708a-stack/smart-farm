@@ -176,6 +176,29 @@ def _ensure_sheet(name: str, headers: list) -> gspread.Worksheet:
         return ws
 
 
+def get_map() -> dict:
+    import json
+    ws = _ensure_sheet('config', ['key', 'value'])
+    for row in ws.get_all_values()[1:]:
+        if row and row[0] == 'farm_map':
+            try:
+                return json.loads(row[1])
+            except Exception:
+                return {}
+    return {}
+
+
+def save_map(data: dict):
+    import json
+    ws   = _ensure_sheet('config', ['key', 'value'])
+    blob = json.dumps(data, ensure_ascii=False)
+    for i, row in enumerate(ws.get_all_values()[1:], start=2):
+        if row and row[0] == 'farm_map':
+            ws.update_cell(i, 2, blob)
+            return
+    ws.append_row(['farm_map', blob])
+
+
 def get_activities() -> list[dict]:
     ws = _ensure_sheet('activities', ['date', 'note'])
     return ws.get_all_records()

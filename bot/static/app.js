@@ -61,6 +61,7 @@ function setupTabs() {
       if (page === 'page-harvest')  renderHarvest();
       if (page === 'page-analysis') renderAnalysis();
       if (page === 'page-calendar') renderCalendarPage();
+      if (page === 'page-map')      renderMapPage();
     });
   });
 }
@@ -474,6 +475,178 @@ async function deleteTxn(txnId) {
     const active = document.querySelector('.plot-btn.active');
     if (active) renderPlotDetail(active.dataset.plotId);
   } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+}
+
+// ---------------------------------------------------------------------------
+// Farm Map
+// ---------------------------------------------------------------------------
+const ZONES = [
+  { id:0, label:'ว่างเปล่า',  color:'#f5f5f5', border:'#e0e0e0', emoji:'⬜' },
+  { id:1, label:'ไร่นา',      color:'#c8e6c9', border:'#66bb6a', emoji:'🌾' },
+  { id:2, label:'สระน้ำ',     color:'#bbdefb', border:'#42a5f5', emoji:'💧' },
+  { id:3, label:'บ้าน/อาคาร', color:'#ffe0b2', border:'#ffa726', emoji:'🏠' },
+  { id:4, label:'ทางเดิน',    color:'#d7ccc8', border:'#a1887f', emoji:'🛤️' },
+  { id:5, label:'ต้นไม้',     color:'#a5d6a7', border:'#388e3c', emoji:'🌳' },
+  { id:6, label:'โรงเก็บของ', color:'#bcaaa4', border:'#795548', emoji:'🏗️' },
+  { id:7, label:'ลบ/ล้าง',    color:'#ffffff', border:'#bbb',    emoji:'🧹' },
+];
+
+let mapGrid       = [];
+let mapRows       = 15;
+let mapCols       = 20;
+let mapCellM      = 10;
+let selectedZone  = 1;
+let isPainting    = false;
+let mapInitialized = false;
+let mapCanvas, mapCtx;
+const CELL_PX     = 28;
+
+function renderMapPage() {
+  if (!mapInitialized) {
+    mapCanvas = document.getElementById('map-canvas');
+    mapCtx    = mapCanvas.getContext('2d');
+    setupMapEvents();
+    buildZoneToolbar();
+    mapInitialized = true;
+  }
+  fetch(`${API}/api/map`).then(r => r.json()).then(data => {
+    if (data && data.grid && data.grid.length) {
+      mapRows  = data.rows   || mapRows;
+      mapCols  = data.cols   || mapCols;
+      mapCellM = data.cell_m || mapCellM;
+      mapGrid  = data.grid;
+      document.getElementById('map-cell-m').value = mapCellM;
+      const gs = `${mapRows}-${mapCols}`;
+      if (document.querySelector(`#map-grid-size option[value="${gs}"]`))
+        document.getElementById('map-grid-size').value = gs;
+    } else {
+      mapGrid = new Array(mapRows * mapCols).fill(0);
+    }
+    redrawMap();
+  }).catch(() => {
+    mapGrid = new Array(mapRows * mapCols).fill(0);
+    redrawMap();
+  });
+}
+
+function buildZoneToolbar() {
+  document.getElementById('zone-toolbar').innerHTML = ZONES.map(z => `
+    <button class="zone-btn${z.id === selectedZone ? ' active' : ''}"
+            id="zone-btn-${z.id}"
+            style="background:${z.color};border-color:${z.border}"
+            onclick="selectZone(${z.id})">
+      <span class="zone-icon">${z.emoji}</span>
+      <span class="zone-name">${z.label}</span>
+    </button>
+  `).join('');
+}
+
+function selectZone(id) {
+  selectedZone = id;
+  document.querySelectorAll('.zone-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`zone-btn-${id}`).classList.add('active');
+}
+
+function setupMapEvents() {
+  const getPos = e => {
+    const rect  = mapCanvas.getBoundingClientRect();
+    const src   = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  };
+  const paint = e => {
+    const { x, y } = getPos(e);
+    const c = Math.floor(x / CELL_PX);
+    const r = Math.floor(y / CELL_PX);
+    if (c < 0 || c >= mapCols || r < 0 || r >= mapRows) return;
+    const idx  = r * mapCols + c;
+    const zone = selectedZone === 7 ? 0 : selectedZone;
+    if (mapGrid[idx] === zone) return;
+    mapGrid[idx] = zone;
+    const z = ZONES[zone];
+    mapCtx.fillStyle = z.color;
+    mapCtx.fillRect(c * CELL_PX, r * CELL_PX, CELL_PX, CELL_PX);
+    mapCtx.strokeStyle = z.border;
+    mapCtx.lineWidth = 0.5;
+    mapCtx.strokeRect(c * CELL_PX + 0.5, r * CELL_PX + 0.5, CELL_PX - 1, CELL_PX - 1);
+    updateMapLegend();
+  };
+  mapCanvas.addEventListener('mousedown',  e => { isPainting = true;  paint(e); });
+  mapCanvas.addEventListener('mousemove',  e => { if (isPainting) paint(e); });
+  mapCanvas.addEventListener('mouseup',    () => isPainting = false);
+  mapCanvas.addEventListener('mouseleave', () => isPainting = false);
+  mapCanvas.addEventListener('touchstart',  e => { e.preventDefault(); isPainting = true;  paint(e); }, { passive:false });
+  mapCanvas.addEventListener('touchmove',   e => { e.preventDefault(); if (isPainting) paint(e); }, { passive:false });
+  mapCanvas.addEventListener('touchend',    () => isPainting = false);
+}
+
+function redrawMap() {
+  mapCanvas.width  = CELL_PX * mapCols;
+  mapCanvas.height = CELL_PX * mapRows;
+  for (let r = 0; r < mapRows; r++) {
+    for (let c = 0; c < mapCols; c++) {
+      const zid = mapGrid[r * mapCols + c] || 0;
+      const z   = ZONES[zid];
+      mapCtx.fillStyle = z.color;
+      mapCtx.fillRect(c * CELL_PX, r * CELL_PX, CELL_PX, CELL_PX);
+      mapCtx.strokeStyle = z.border;
+      mapCtx.lineWidth = 0.5;
+      mapCtx.strokeRect(c * CELL_PX + 0.5, r * CELL_PX + 0.5, CELL_PX - 1, CELL_PX - 1);
+    }
+  }
+  updateMapLegend();
+}
+
+function updateMapLegend() {
+  const counts = new Array(ZONES.length).fill(0);
+  mapGrid.forEach(z => { if (z >= 0 && z < ZONES.length) counts[z]++; });
+  const cellArea = mapCellM * mapCellM;
+  const rows = ZONES.filter((z, i) => i > 0 && i < 7 && counts[i] > 0).map(z => {
+    const m2  = counts[z.id] * cellArea;
+    const rai = (m2 / 1600).toFixed(2);
+    return `<div class="map-leg-item">
+      <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
+      <span>${z.emoji} ${z.label}</span>
+      <span class="map-leg-area">${m2.toLocaleString()} ม² · ${rai} ไร่</span>
+    </div>`;
+  });
+  document.getElementById('map-legend').innerHTML = rows.length
+    ? rows.join('')
+    : '<p style="color:#aaa;text-align:center;padding:12px">วาดแผนผังด้านบนเพื่อดูสรุปพื้นที่</p>';
+}
+
+function onCellMChange() {
+  mapCellM = parseInt(document.getElementById('map-cell-m').value);
+  updateMapLegend();
+}
+
+function onGridSizeChange() {
+  const [r, c] = document.getElementById('map-grid-size').value.split('-').map(Number);
+  const newGrid = new Array(r * c).fill(0);
+  for (let rr = 0; rr < Math.min(r, mapRows); rr++)
+    for (let cc = 0; cc < Math.min(c, mapCols); cc++)
+      newGrid[rr * c + cc] = mapGrid[rr * mapCols + cc] || 0;
+  mapRows = r; mapCols = c; mapGrid = newGrid;
+  redrawMap();
+}
+
+async function saveMap() {
+  const btn = document.getElementById('map-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await fetch(`${API}/api/map`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows: mapRows, cols: mapCols, cell_m: mapCellM, grid: mapGrid }),
+    });
+    btn.textContent = '✅ บันทึกแล้ว';
+    setTimeout(() => { btn.textContent = '💾 บันทึก'; }, 2000);
+  } catch { alert('บันทึกไม่ได้ ลองใหม่'); btn.textContent = '💾 บันทึก'; }
+  finally  { btn.disabled = false; }
+}
+
+function clearMap() {
+  if (!confirm('ล้างแผนผังทั้งหมดใช่ไหมครับ?')) return;
+  mapGrid = new Array(mapRows * mapCols).fill(0);
+  redrawMap();
 }
 
 // ---------------------------------------------------------------------------

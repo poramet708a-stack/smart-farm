@@ -99,6 +99,19 @@ def api_delete_plot(plot_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/map')
+def api_get_map():
+    from bot.sheets import get_map
+    return jsonify(get_map())
+
+
+@app.route('/api/map', methods=['POST'])
+def api_save_map():
+    from bot.sheets import save_map
+    save_map(request.get_json())
+    return jsonify({'ok': True})
+
+
 @app.route('/api/activities')
 def api_get_activities():
     from bot.sheets import get_activities
