@@ -4,6 +4,7 @@ let allPlots        = [];
 let allTransactions = [];
 let allHarvest      = [];
 let allActivities   = [];
+let yieldEstimates  = {};
 let charts          = {};
 
 const EXPENSE_CATS = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ'];
@@ -197,28 +198,117 @@ function renderHarvest() {
 // ---------------------------------------------------------------------------
 // Page 4: Analysis
 // ---------------------------------------------------------------------------
-function renderAnalysis() {
+async function renderAnalysis() {
+  if (!Object.keys(yieldEstimates).length) {
+    try { yieldEstimates = await fetch(`${API}/api/yields`).then(r => r.json()); }
+    catch { yieldEstimates = {}; }
+  }
+
   const container = document.getElementById('analysis-content');
   container.innerHTML = '';
+
+  if (!allPlots.length) {
+    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
+    return;
+  }
+
   allPlots.forEach(p => {
     const txns    = allTransactions.filter(r => r.plot_id === p.plot_id);
     const expense = sum(txns, 'รายจ่าย');
     const area    = parseFloat(p.area_rai) || 1;
-    const yMap    = { 'ข้าว': 500, 'มันสำปะหลัง': 3500, 'ข้าวโพด': 800 };
-    const est     = (yMap[p.crop_type] || 500) * area;
-    const box     = document.createElement('div');
-    box.className = 'breakeven';
+    const estKg   = yieldEstimates[p.plot_id] || 0;
+
+    const box = document.createElement('div');
+    box.className = 'analysis-box';
+    box.id = `abox-${p.plot_id}`;
     box.innerHTML = `
-      <h3>📐 ${p.plot_name} (${p.crop_type}, ${area} ไร่)</h3>
-      <p>💸 ต้นทุนรวม: <strong>${fmt(expense)} บาท</strong></p>
-      <p>📦 ประมาณการผลผลิต: <strong>${fmt(est)} กก.</strong></p>
-      <p>⚖️ ราคาขายขั้นต่ำคุ้มทุน: <strong>${fmt(est > 0 ? expense / est : 0)} บาท/กก.</strong></p>
-      <p>🌾 ต้นทุนต่อไร่: <strong>${fmt(expense / area)} บาท/ไร่</strong></p>
+      <h3>📐 ${p.plot_name} · ${p.crop_type} · ${area} ไร่</h3>
+      <div class="an-row"><span>💸 ต้นทุนรวม</span><strong>${fmt(expense)} บาท</strong></div>
+      <div class="an-row"><span>🌾 ต้นทุนต่อไร่</span><strong>${fmt(expense / area)} บาท/ไร่</strong></div>
+      <div class="an-input-row">
+        <label>📦 ประมาณการผลผลิต</label>
+        <input class="yield-input" type="number" min="0" placeholder="กรอก กก."
+               data-plot="${p.plot_id}" data-expense="${expense}"
+               value="${estKg || ''}"
+               oninput="recalcPlot(this)">
+        <span>กก.</span>
+      </div>
+      <div id="acalc-${p.plot_id}">
+        ${estKg ? _calcHtml(expense, estKg, p.plot_id) : '<p class="an-hint">← กรอกประมาณการผลผลิตเพื่อคำนวณ</p>'}
+      </div>
     `;
     container.appendChild(box);
   });
-  if (!allPlots.length)
-    container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
+
+  const btn = document.createElement('button');
+  btn.className = 'btn-save';
+  btn.id        = 'yield-save-btn';
+  btn.style     = 'width:100%;margin-top:8px;padding:14px';
+  btn.textContent = '💾 บันทึกการประเมิน';
+  btn.onclick   = saveYieldEstimates;
+  container.appendChild(btn);
+}
+
+function _calcHtml(expense, estKg, plotId) {
+  const breakEven = estKg > 0 ? expense / estKg : 0;
+  return `
+    <div class="an-row highlight">
+      <span>⚖️ ราคาคุ้มทุน</span><strong>${fmt(breakEven)} บาท/กก.</strong>
+    </div>
+    <div class="an-input-row" style="margin-top:8px">
+      <label>💰 จำลอง ถ้าขายที่</label>
+      <input class="price-input" type="number" min="0" placeholder="บาท/กก."
+             data-plot="${plotId}" data-expense="${expense}" data-est="${estKg}"
+             oninput="recalcProfit(this)">
+      <span>บาท/กก.</span>
+    </div>
+    <div id="aprofit-${plotId}"></div>
+  `;
+}
+
+function recalcPlot(input) {
+  const plotId  = input.dataset.plot;
+  const expense = parseFloat(input.dataset.expense) || 0;
+  const estKg   = parseFloat(input.value) || 0;
+  yieldEstimates[plotId] = estKg;
+  document.getElementById(`acalc-${plotId}`).innerHTML =
+    estKg ? _calcHtml(expense, estKg, plotId) : '<p class="an-hint">← กรอกประมาณการผลผลิตเพื่อคำนวณ</p>';
+}
+
+function recalcProfit(input) {
+  const price   = parseFloat(input.value) || 0;
+  const expense = parseFloat(input.dataset.expense) || 0;
+  const estKg   = parseFloat(input.dataset.est) || 0;
+  const plotId  = input.dataset.plot;
+  const profit  = price * estKg - expense;
+  const el      = document.getElementById(`aprofit-${plotId}`);
+  if (!price) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div class="an-row"><span>📈 รายได้ประมาณ</span><strong>${fmt(price * estKg)} บาท</strong></div>
+    <div class="an-row ${profit >= 0 ? 'an-profit' : 'an-loss'}">
+      <span>${profit >= 0 ? '✅ กำไร' : '❌ ขาดทุน'}</span>
+      <strong>${profit >= 0 ? '+' : ''}${fmt(profit)} บาท</strong>
+    </div>
+  `;
+}
+
+async function saveYieldEstimates() {
+  document.querySelectorAll('.yield-input').forEach(inp => {
+    const v = parseFloat(inp.value);
+    if (v > 0) yieldEstimates[inp.dataset.plot] = v;
+    else delete yieldEstimates[inp.dataset.plot];
+  });
+  const btn = document.getElementById('yield-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await fetch(`${API}/api/yields`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(yieldEstimates),
+    });
+    btn.textContent = '✅ บันทึกแล้ว';
+    setTimeout(() => { btn.textContent = '💾 บันทึกการประเมิน'; }, 2000);
+  } catch { alert('บันทึกไม่ได้ ลองใหม่'); btn.textContent = '💾 บันทึกการประเมิน'; }
+  finally { btn.disabled = false; }
 }
 
 // ---------------------------------------------------------------------------

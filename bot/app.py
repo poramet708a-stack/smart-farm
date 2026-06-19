@@ -99,6 +99,19 @@ def api_delete_plot(plot_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/yields')
+def api_get_yields():
+    from bot.sheets import get_yield_estimates
+    return jsonify(get_yield_estimates())
+
+
+@app.route('/api/yields', methods=['POST'])
+def api_save_yields():
+    from bot.sheets import save_yield_estimates
+    save_yield_estimates(request.get_json())
+    return jsonify({'ok': True})
+
+
 @app.route('/api/map')
 def api_get_map():
     from bot.sheets import get_map

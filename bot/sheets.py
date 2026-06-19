@@ -176,6 +176,29 @@ def _ensure_sheet(name: str, headers: list) -> gspread.Worksheet:
         return ws
 
 
+def get_yield_estimates() -> dict:
+    import json
+    ws = _ensure_sheet('config', ['key', 'value'])
+    for row in ws.get_all_values()[1:]:
+        if row and row[0] == 'yield_estimates':
+            try:
+                return json.loads(row[1])
+            except Exception:
+                return {}
+    return {}
+
+
+def save_yield_estimates(data: dict):
+    import json
+    ws   = _ensure_sheet('config', ['key', 'value'])
+    blob = json.dumps(data, ensure_ascii=False)
+    for i, row in enumerate(ws.get_all_values()[1:], start=2):
+        if row and row[0] == 'yield_estimates':
+            ws.update_cell(i, 2, blob)
+            return
+    ws.append_row(['yield_estimates', blob])
+
+
 def get_map() -> dict:
     import json
     ws = _ensure_sheet('config', ['key', 'value'])
