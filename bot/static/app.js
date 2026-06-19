@@ -581,83 +581,101 @@ const ZONES = [
   { id:7, label:'ลบ/ล้าง',    color:'#ffffff', border:'#bbb',    emoji:'🧹' },
 ];
 
-let mapGrid       = [];
-let mapRows       = 15;
-let mapCols       = 20;
-let mapCellM      = 10;
-let selectedZone  = 1;
-let isPainting    = false;
+let mapGrid        = [];
+let mapRows        = 15;
+let mapCols        = 20;
+let mapCellM       = 10;
+let mapZoneLabels  = {};
+let selectedZone   = 1;
+let isPainting     = false;
 let mapInitialized = false;
+let zoomLevel      = 1;
+let editingZoneId  = null;
 let mapCanvas, mapCtx;
-const CELL_PX     = 28;
+const BASE_CELL_PX = 28;
+
+function getCellPx() { return Math.max(8, Math.round(BASE_CELL_PX * zoomLevel)); }
 
 function renderMapPage() {
   if (!mapInitialized) {
     mapCanvas = document.getElementById('map-canvas');
     mapCtx    = mapCanvas.getContext('2d');
     setupMapEvents();
-    buildZoneToolbar();
     mapInitialized = true;
   }
   fetch(`${API}/api/map`).then(r => r.json()).then(data => {
     if (data && data.grid && data.grid.length) {
-      mapRows  = data.rows   || mapRows;
-      mapCols  = data.cols   || mapCols;
-      mapCellM = data.cell_m || mapCellM;
-      mapGrid  = data.grid;
-      document.getElementById('map-cell-m').value = mapCellM;
-      const gs = `${mapRows}-${mapCols}`;
-      if (document.querySelector(`#map-grid-size option[value="${gs}"]`))
-        document.getElementById('map-grid-size').value = gs;
+      mapRows       = data.rows         || mapRows;
+      mapCols       = data.cols         || mapCols;
+      mapCellM      = data.cell_m       || mapCellM;
+      mapGrid       = data.grid;
+      mapZoneLabels = data.zone_labels  || {};
+      zoomLevel     = data.zoom         || 1;
+      document.getElementById('map-cell-m').value   = mapCellM;
+      document.getElementById('map-width-m').value  = mapCols * mapCellM;
+      document.getElementById('map-height-m').value = mapRows * mapCellM;
     } else {
       mapGrid = new Array(mapRows * mapCols).fill(0);
     }
+    updateZoomLabel();
+    buildZoneToolbar();
     redrawMap();
   }).catch(() => {
     mapGrid = new Array(mapRows * mapCols).fill(0);
+    buildZoneToolbar();
     redrawMap();
   });
 }
 
 function buildZoneToolbar() {
-  document.getElementById('zone-toolbar').innerHTML = ZONES.map(z => `
-    <button class="zone-btn${z.id === selectedZone ? ' active' : ''}"
-            id="zone-btn-${z.id}"
-            style="background:${z.color};border-color:${z.border}"
-            onclick="selectZone(${z.id})">
+  document.getElementById('zone-toolbar').innerHTML = ZONES.map(z => {
+    const info     = mapZoneLabels[z.id] || {};
+    const label    = info.label || z.label;
+    const plotName = info.plot_id ? (allPlots.find(p => p.plot_id === info.plot_id)?.plot_name || '') : '';
+    const editBtn  = (z.id > 0 && z.id < 7)
+      ? `<span class="zone-edit-icon" onclick="event.stopPropagation();openZoneEdit(${z.id})">✏️</span>` : '';
+    return `<button class="zone-btn${z.id === selectedZone ? ' active' : ''}"
+              id="zone-btn-${z.id}"
+              style="background:${z.color};border-color:${z.border}"
+              onclick="selectZone(${z.id})">
       <span class="zone-icon">${z.emoji}</span>
-      <span class="zone-name">${z.label}</span>
-    </button>
-  `).join('');
+      <span class="zone-name">${label}</span>
+      ${plotName ? `<span class="zone-plot-tag">${plotName}</span>` : ''}
+      ${editBtn}
+    </button>`;
+  }).join('');
 }
 
 function selectZone(id) {
   selectedZone = id;
   document.querySelectorAll('.zone-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(`zone-btn-${id}`).classList.add('active');
+  document.getElementById(`zone-btn-${id}`)?.classList.add('active');
 }
 
 function setupMapEvents() {
   const getPos = e => {
-    const rect  = mapCanvas.getBoundingClientRect();
-    const src   = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    const rect   = mapCanvas.getBoundingClientRect();
+    const src    = e.touches ? e.touches[0] : e;
+    const scaleX = mapCanvas.width  / rect.width;
+    const scaleY = mapCanvas.height / rect.height;
+    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
   };
   const paint = e => {
     const { x, y } = getPos(e);
-    const c = Math.floor(x / CELL_PX);
-    const r = Math.floor(y / CELL_PX);
+    const cp   = getCellPx();
+    const c    = Math.floor(x / cp);
+    const r    = Math.floor(y / cp);
     if (c < 0 || c >= mapCols || r < 0 || r >= mapRows) return;
-    const idx  = r * mapCols + c;
     const zone = selectedZone === 7 ? 0 : selectedZone;
+    const idx  = r * mapCols + c;
     if (mapGrid[idx] === zone) return;
     mapGrid[idx] = zone;
     const z = ZONES[zone];
-    mapCtx.fillStyle = z.color;
-    mapCtx.fillRect(c * CELL_PX, r * CELL_PX, CELL_PX, CELL_PX);
+    mapCtx.fillStyle   = z.color;
+    mapCtx.fillRect(c * cp, r * cp, cp, cp);
     mapCtx.strokeStyle = z.border;
-    mapCtx.lineWidth = 0.5;
-    mapCtx.strokeRect(c * CELL_PX + 0.5, r * CELL_PX + 0.5, CELL_PX - 1, CELL_PX - 1);
+    mapCtx.lineWidth   = 0.5;
+    mapCtx.strokeRect(c * cp + 0.5, r * cp + 0.5, cp - 1, cp - 1);
     updateMapLegend();
   };
   mapCanvas.addEventListener('mousedown',  e => { isPainting = true;  paint(e); });
@@ -670,53 +688,124 @@ function setupMapEvents() {
 }
 
 function redrawMap() {
-  mapCanvas.width  = CELL_PX * mapCols;
-  mapCanvas.height = CELL_PX * mapRows;
+  const cp = getCellPx();
+  mapCanvas.width  = cp * mapCols;
+  mapCanvas.height = cp * mapRows;
   for (let r = 0; r < mapRows; r++) {
     for (let c = 0; c < mapCols; c++) {
       const zid = mapGrid[r * mapCols + c] || 0;
       const z   = ZONES[zid];
-      mapCtx.fillStyle = z.color;
-      mapCtx.fillRect(c * CELL_PX, r * CELL_PX, CELL_PX, CELL_PX);
+      mapCtx.fillStyle   = z.color;
+      mapCtx.fillRect(c * cp, r * cp, cp, cp);
       mapCtx.strokeStyle = z.border;
-      mapCtx.lineWidth = 0.5;
-      mapCtx.strokeRect(c * CELL_PX + 0.5, r * CELL_PX + 0.5, CELL_PX - 1, CELL_PX - 1);
+      mapCtx.lineWidth   = 0.5;
+      mapCtx.strokeRect(c * cp + 0.5, r * cp + 0.5, cp - 1, cp - 1);
     }
   }
   updateMapLegend();
 }
 
-function updateMapLegend() {
-  const counts = new Array(ZONES.length).fill(0);
-  mapGrid.forEach(z => { if (z >= 0 && z < ZONES.length) counts[z]++; });
-  const cellArea = mapCellM * mapCellM;
-  const rows = ZONES.filter((z, i) => i > 0 && i < 7 && counts[i] > 0).map(z => {
-    const m2  = counts[z.id] * cellArea;
-    const rai = (m2 / 1600).toFixed(2);
-    return `<div class="map-leg-item">
-      <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
-      <span>${z.emoji} ${z.label}</span>
-      <span class="map-leg-area">${m2.toLocaleString()} ม² · ${rai} ไร่</span>
-    </div>`;
-  });
-  document.getElementById('map-legend').innerHTML = rows.length
-    ? rows.join('')
-    : '<p style="color:#aaa;text-align:center;padding:12px">วาดแผนผังด้านบนเพื่อดูสรุปพื้นที่</p>';
+function zoomIn()  { if (zoomLevel < 4)    { zoomLevel = Math.round((zoomLevel + 0.25)*4)/4; updateZoomLabel(); redrawMap(); } }
+function zoomOut() { if (zoomLevel > 0.25) { zoomLevel = Math.round((zoomLevel - 0.25)*4)/4; updateZoomLabel(); redrawMap(); } }
+function updateZoomLabel() { setText('zoom-label', Math.round(zoomLevel * 100) + '%'); }
+
+function applyGridSize() {
+  const wm  = parseInt(document.getElementById('map-width-m').value)  || 200;
+  const hm  = parseInt(document.getElementById('map-height-m').value) || 150;
+  mapCellM  = parseInt(document.getElementById('map-cell-m').value)   || 10;
+  const nc  = Math.max(5, Math.min(200, Math.round(wm / mapCellM)));
+  const nr  = Math.max(5, Math.min(200, Math.round(hm / mapCellM)));
+  const ng  = new Array(nr * nc).fill(0);
+  for (let r = 0; r < Math.min(nr, mapRows); r++)
+    for (let c = 0; c < Math.min(nc, mapCols); c++)
+      ng[r * nc + c] = mapGrid[r * mapCols + c] || 0;
+  mapRows = nr; mapCols = nc; mapGrid = ng;
+  redrawMap();
 }
 
 function onCellMChange() {
-  mapCellM = parseInt(document.getElementById('map-cell-m').value);
+  mapCellM = parseInt(document.getElementById('map-cell-m').value) || 10;
   updateMapLegend();
 }
 
-function onGridSizeChange() {
-  const [r, c] = document.getElementById('map-grid-size').value.split('-').map(Number);
-  const newGrid = new Array(r * c).fill(0);
-  for (let rr = 0; rr < Math.min(r, mapRows); rr++)
-    for (let cc = 0; cc < Math.min(c, mapCols); cc++)
-      newGrid[rr * c + cc] = mapGrid[rr * mapCols + cc] || 0;
-  mapRows = r; mapCols = c; mapGrid = newGrid;
-  redrawMap();
+function updateMapLegend() {
+  const counts   = new Array(ZONES.length).fill(0);
+  mapGrid.forEach(z => { if (z >= 0 && z < ZONES.length) counts[z]++; });
+  const cellArea = mapCellM * mapCellM;
+
+  const zoneRows = ZONES.filter((z, i) => i > 0 && i < 7 && counts[i] > 0).map(z => {
+    const info  = mapZoneLabels[z.id] || {};
+    const label = info.label || z.label;
+    const m2    = counts[z.id] * cellArea;
+    return `<div class="map-leg-item">
+      <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
+      <span>${z.emoji} ${label}</span>
+      <span class="map-leg-area">${m2.toLocaleString()} ม² · ${(m2/1600).toFixed(2)} ไร่</span>
+    </div>`;
+  });
+
+  const linked = Object.entries(mapZoneLabels)
+    .filter(([, v]) => v.plot_id)
+    .map(([zid, v]) => {
+      const z    = ZONES[parseInt(zid)];
+      const plot = allPlots.find(p => p.plot_id === v.plot_id);
+      if (!z || !plot) return '';
+      return `<div class="map-link-item">
+        <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
+        <span>${v.label || z.label} → <strong>${plot.plot_name}</strong></span>
+        <button class="btn-goto-plot" onclick="navigateToPlot('${v.plot_id}')">ดูแปลง →</button>
+      </div>`;
+    }).filter(Boolean);
+
+  let html = zoneRows.length
+    ? zoneRows.join('')
+    : '<p style="color:#aaa;text-align:center;padding:12px">วาดแผนผังเพื่อดูสรุปพื้นที่</p>';
+  if (linked.length)
+    html += `<div class="map-links-hdr">🔗 ลิงก์แปลง</div>${linked.join('')}`;
+  document.getElementById('map-legend').innerHTML = html;
+}
+
+// Zone edit
+function openZoneEdit(zoneId) {
+  editingZoneId = zoneId;
+  const info = mapZoneLabels[zoneId] || {};
+  document.getElementById('zf-label').value   = info.label || ZONES[zoneId]?.label || '';
+  document.getElementById('zf-plot').innerHTML =
+    '<option value="">ไม่เชื่อมกับแปลง</option>' +
+    allPlots.map(p => `<option value="${p.plot_id}"${info.plot_id===p.plot_id?' selected':''}>${p.plot_name}</option>`).join('');
+  document.getElementById('zone-modal').classList.add('open');
+}
+function closeZoneModal(e) {
+  if (!e || e.target === document.getElementById('zone-modal'))
+    document.getElementById('zone-modal').classList.remove('open');
+}
+function saveZoneEdit() {
+  if (editingZoneId === null) return;
+  mapZoneLabels[editingZoneId] = {
+    label:   document.getElementById('zf-label').value.trim() || ZONES[editingZoneId]?.label,
+    plot_id: document.getElementById('zf-plot').value || null,
+  };
+  closeZoneModal();
+  buildZoneToolbar();
+  updateMapLegend();
+}
+
+// Navigate to plot tab
+function navigateToPlot(plotId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-page="page-plots"]').classList.add('active');
+  document.getElementById('page-plots').classList.add('active');
+  renderPlots();
+  setTimeout(() => {
+    document.querySelectorAll('.plot-btn').forEach(b => {
+      if (b.dataset.plotId === plotId) {
+        document.querySelectorAll('.plot-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+      }
+    });
+    renderPlotDetail(plotId);
+  }, 80);
 }
 
 async function saveMap() {
@@ -725,7 +814,8 @@ async function saveMap() {
   try {
     await fetch(`${API}/api/map`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows: mapRows, cols: mapCols, cell_m: mapCellM, grid: mapGrid }),
+      body: JSON.stringify({ rows: mapRows, cols: mapCols, cell_m: mapCellM,
+                             grid: mapGrid, zone_labels: mapZoneLabels, zoom: zoomLevel }),
     });
     btn.textContent = '✅ บันทึกแล้ว';
     setTimeout(() => { btn.textContent = '💾 บันทึก'; }, 2000);

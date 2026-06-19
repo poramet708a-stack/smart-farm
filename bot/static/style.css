@@ -397,29 +397,88 @@ tr:hover td { background: #fafafa; }
   border-radius: 10px;
   cursor: pointer;
   font-family: inherit;
-  min-width: 68px;
+  min-width: 72px;
   white-space: nowrap;
   flex-shrink: 0;
+  position: relative;
 }
 .zone-btn.active { box-shadow: 0 0 0 3px #2e7d32; }
 .zone-icon { font-size: 1.3rem; }
 .zone-name { font-size: 0.7rem; margin-top: 2px; color: #333; }
+.zone-plot-tag { font-size: 0.62rem; color: #1565c0; margin-top: 1px; }
+.zone-edit-icon {
+  position: absolute;
+  top: 2px; right: 4px;
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+.zone-edit-icon:hover { opacity: 1; }
 
 .map-controls {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .map-ctrl-label { font-size: 0.85rem; color: #666; white-space: nowrap; }
-.map-controls select {
+.map-controls select, .map-dim-input {
   padding: 7px 10px;
   border: 1px solid #ddd;
   border-radius: 8px;
   font-family: inherit;
   font-size: 0.9rem;
 }
+.map-dim-input { width: 76px; text-align: right; }
+.btn-apply {
+  padding: 7px 14px;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 8px;
+  color: #2e7d32;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.zoom-btn {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.zoom-btn:hover { background: #f5f5f5; }
+.zoom-label { font-size: 0.9rem; font-weight: 700; min-width: 44px; text-align: center; }
+
+.map-links-hdr {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #555;
+  margin: 12px 0 6px;
+}
+.map-link-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 0.9rem;
+}
+.btn-goto-plot {
+  margin-left: auto;
+  padding: 5px 12px;
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 8px;
+  color: #1565c0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.btn-goto-plot:hover { background: #bbdefb; }
 
 .map-canvas-wrap {
   overflow: auto;

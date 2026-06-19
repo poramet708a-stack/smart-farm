@@ -191,20 +191,24 @@
     <div class="zone-toolbar" id="zone-toolbar"></div>
 
     <div class="map-controls">
-      <label class="map-ctrl-label">ขนาดช่อง:</label>
+      <label class="map-ctrl-label">กว้าง:</label>
+      <input type="number" id="map-width-m"  value="200" min="10" max="5000" class="map-dim-input"> ม.
+      <label class="map-ctrl-label">ยาว:</label>
+      <input type="number" id="map-height-m" value="150" min="10" max="5000" class="map-dim-input"> ม.
+      <label class="map-ctrl-label">ช่องละ:</label>
       <select id="map-cell-m" onchange="onCellMChange()">
         <option value="5">5 ม.</option>
         <option value="10" selected>10 ม.</option>
         <option value="20">20 ม.</option>
         <option value="50">50 ม.</option>
       </select>
-      <label class="map-ctrl-label">กริด:</label>
-      <select id="map-grid-size" onchange="onGridSizeChange()">
-        <option value="10-15">เล็ก 10×15</option>
-        <option value="15-20" selected>กลาง 15×20</option>
-        <option value="20-30">ใหญ่ 20×30</option>
-        <option value="25-40">ใหญ่มาก 25×40</option>
-      </select>
+      <button class="btn-apply" onclick="applyGridSize()">ตั้งค่า</button>
+    </div>
+    <div class="map-controls" style="gap:6px">
+      <button class="zoom-btn" onclick="zoomOut()">🔍−</button>
+      <span id="zoom-label" class="zoom-label">100%</span>
+      <button class="zoom-btn" onclick="zoomIn()">🔍+</button>
+      <div style="flex:1"></div>
       <button class="btn-save"   id="map-save-btn" onclick="saveMap()" style="flex:0;padding:8px 18px">💾 บันทึก</button>
       <button class="btn-cancel" onclick="clearMap()" style="flex:0;padding:8px 14px">🗑️ ล้าง</button>
     </div>
@@ -316,6 +320,27 @@
         <button type="submit" class="btn-save" id="plot-save-btn">บันทึก</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal: แก้ไขโซน -->
+<div id="zone-modal" class="modal-overlay" onclick="closeZoneModal(event)">
+  <div class="modal">
+    <h2>✏️ แก้ไขโซน</h2>
+    <div class="form-row">
+      <label>ชื่อโซน</label>
+      <input id="zf-label" type="text" placeholder="เช่น แปลงข้าว A">
+    </div>
+    <div class="form-row">
+      <label>เชื่อมกับแปลง <span style="color:#aaa;font-size:0.8rem">(กด "ดูแปลง" ในหน้าผังได้)</span></label>
+      <select id="zf-plot">
+        <option value="">ไม่เชื่อม</option>
+      </select>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-cancel" onclick="closeZoneModal()">ยกเลิก</button>
+      <button type="button" class="btn-save"   onclick="saveZoneEdit()">บันทึก</button>
+    </div>
   </div>
 </div>
 
