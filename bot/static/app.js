@@ -35,16 +35,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [plots, txns, harvest, acts] = await Promise.all([
+  const [plots, txns, harvest, acts, yields] = await Promise.all([
     fetch(`${API}/api/plots`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/transactions`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/harvest`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/activities`).then(r => r.json()).catch(() => []),
+    fetch(`${API}/api/yields`).then(r => r.json()).catch(() => ({})),
   ]);
   allPlots        = plots;
   allTransactions = txns;
   allHarvest      = harvest;
   allActivities   = acts;
+  yieldEstimates  = yields;
+}
+
+// helper: normalize yieldEstimates entry → { kg, price }
+function yieldData(plotId) {
+  const e = yieldEstimates[plotId];
+  if (!e) return { kg: 0, price: 0 };
+  if (typeof e === 'object') return { kg: e.kg || 0, price: e.price || 0 };
+  return { kg: e, price: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +93,7 @@ function renderOverview() {
   setText('ov-count',   thisMonth.length);
 
   renderMonthlyChart(allTransactions);
+  if (charts.monthly) charts.monthly.canvas.style.borderRadius = '8px';
 
   const plotExpense = groupByPlot(allTransactions.filter(r => r.type === 'รายจ่าย'));
   const topPlot     = topEntry(plotExpense);
@@ -100,19 +111,55 @@ function renderOvPlotBars(plotExpense) {
   const el = document.getElementById('ov-plot-bars');
   if (!el) return;
   if (!allPlots.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
-  const entries = allPlots.map(p => ({
-    name: p.plot_name,
-    val:  plotExpense[p.plot_id] || 0,
-  })).sort((a, b) => b.val - a.val);
-  const max = entries[0]?.val || 1;
-  el.innerHTML = entries.map(e => `
-    <div class="ov-bar-row">
-      <div class="ov-bar-label">${e.name}</div>
-      <div class="ov-bar-wrap">
-        <div class="ov-bar-fill" style="width:${e.val ? Math.max(4, Math.round(e.val / max * 100)) : 0}%"></div>
+
+  const hasAnyEstimate = allPlots.some(p => {
+    const d = yieldData(p.plot_id);
+    return d.kg > 0 && d.price > 0;
+  });
+
+  el.innerHTML = allPlots.map(p => {
+    const expense = plotExpense[p.plot_id] || 0;
+    const { kg, price } = yieldData(p.plot_id);
+    const estRev  = kg * price;
+    const hasEst  = estRev > 0;
+    const pct     = hasEst ? Math.min(Math.round(expense / estRev * 100), 100) : 0;
+    const over    = hasEst && expense > estRev;
+    const barColor = !hasEst    ? '#90caf9'
+                   : pct < 70  ? '#66bb6a'
+                   : pct < 90  ? '#ffa726'
+                   :              '#ef5350';
+    const fillWidth = hasEst ? Math.max(2, pct) : (expense > 0 ? 100 : 0);
+
+    let statusTag = '';
+    if (hasEst) {
+      if (over) {
+        const diff = expense - estRev;
+        statusTag = `<span class="ov-status-tag red">❌ เกิน ${fmt(diff)} ฿</span>`;
+      } else {
+        const diff = estRev - expense;
+        statusTag = `<span class="ov-status-tag ${pct < 70 ? 'green' : 'orange'}">✅ เหลือ ${fmt(diff)} ฿</span>`;
+      }
+    } else {
+      statusTag = `<span class="ov-status-tag grey">ยังไม่ได้ประเมิน</span>`;
+    }
+
+    return `<div class="ov-bar-block">
+      <div class="ov-bar-head">
+        <span class="ov-bar-name">${p.plot_name}</span>
+        ${statusTag}
       </div>
-      <div class="ov-bar-amt">${e.val ? fmt(e.val) + ' ฿' : '—'}</div>
-    </div>`).join('');
+      <div class="ov-bar-wrap">
+        <div class="ov-bar-fill" style="width:${fillWidth}%;background:${barColor}"></div>
+        ${hasEst ? `<div class="ov-bar-target" title="รายได้ที่ประเมิน"></div>` : ''}
+      </div>
+      <div class="ov-bar-foot">
+        <span>ต้นทุน <strong>${fmt(expense)} ฿</strong></span>
+        ${hasEst
+          ? `<span>ประเมินรายได้ <strong>${fmt(estRev)} ฿</strong> (${kg} กก. × ${price} ฿)</span>`
+          : `<span style="color:#aaa;font-size:0.8rem">ตั้งประเมินได้ที่หน้า 📐 วิเคราะห์</span>`}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderOvPlotCards() {
@@ -345,7 +392,7 @@ async function renderAnalysis() {
     const txns    = allTransactions.filter(r => r.plot_id === p.plot_id);
     const expense = sum(txns, 'รายจ่าย');
     const area    = parseFloat(p.area_rai) || 1;
-    const estKg   = yieldEstimates[p.plot_id] || 0;
+    const { kg: estKg, price: estPrice } = yieldData(p.plot_id);
 
     const box = document.createElement('div');
     box.className = 'analysis-box';
@@ -362,8 +409,16 @@ async function renderAnalysis() {
                oninput="recalcPlot(this)">
         <span>กก.</span>
       </div>
+      <div class="an-input-row">
+        <label>💰 ราคาขายที่คาดไว้</label>
+        <input class="price-input" type="number" min="0" placeholder="บาท/กก."
+               data-plot="${p.plot_id}" data-expense="${expense}" data-est="${estKg}"
+               value="${estPrice || ''}"
+               oninput="recalcProfit(this)">
+        <span>บาท/กก.</span>
+      </div>
       <div id="acalc-${p.plot_id}">
-        ${estKg ? _calcHtml(expense, estKg, p.plot_id) : '<p class="an-hint">← กรอกประมาณการผลผลิตเพื่อคำนวณ</p>'}
+        ${(estKg && estPrice) ? _calcHtml(expense, estKg, estPrice, p.plot_id) : '<p class="an-hint">← กรอกผลผลิต + ราคาเพื่อคำนวณ</p>'}
       </div>
     `;
     container.appendChild(box);
@@ -378,20 +433,19 @@ async function renderAnalysis() {
   container.appendChild(btn);
 }
 
-function _calcHtml(expense, estKg, plotId) {
+function _calcHtml(expense, estKg, estPrice, plotId) {
   const breakEven = estKg > 0 ? expense / estKg : 0;
+  const revenue   = estKg * estPrice;
+  const profit    = revenue - expense;
   return `
     <div class="an-row highlight">
       <span>⚖️ ราคาคุ้มทุน</span><strong>${fmt(breakEven)} บาท/กก.</strong>
     </div>
-    <div class="an-input-row" style="margin-top:8px">
-      <label>💰 จำลอง ถ้าขายที่</label>
-      <input class="price-input" type="number" min="0" placeholder="บาท/กก."
-             data-plot="${plotId}" data-expense="${expense}" data-est="${estKg}"
-             oninput="recalcProfit(this)">
-      <span>บาท/กก.</span>
+    <div class="an-row"><span>📈 รายได้ประมาณ</span><strong>${fmt(revenue)} บาท</strong></div>
+    <div class="an-row ${profit >= 0 ? 'an-profit' : 'an-loss'}">
+      <span>${profit >= 0 ? '✅ กำไรประมาณ' : '❌ ขาดทุนประมาณ'}</span>
+      <strong>${profit >= 0 ? '+' : ''}${fmt(profit)} บาท</strong>
     </div>
-    <div id="aprofit-${plotId}"></div>
   `;
 }
 
@@ -399,9 +453,13 @@ function recalcPlot(input) {
   const plotId  = input.dataset.plot;
   const expense = parseFloat(input.dataset.expense) || 0;
   const estKg   = parseFloat(input.value) || 0;
-  yieldEstimates[plotId] = estKg;
+  const d = yieldData(plotId);
+  yieldEstimates[plotId] = { kg: estKg, price: d.price };
+  const priceEl = document.querySelector(`.price-input[data-plot="${plotId}"]`);
+  priceEl && (priceEl.dataset.est = estKg);
+  const estPrice = d.price;
   document.getElementById(`acalc-${plotId}`).innerHTML =
-    estKg ? _calcHtml(expense, estKg, plotId) : '<p class="an-hint">← กรอกประมาณการผลผลิตเพื่อคำนวณ</p>';
+    (estKg && estPrice) ? _calcHtml(expense, estKg, estPrice, plotId) : '<p class="an-hint">← กรอกผลผลิต + ราคาเพื่อคำนวณ</p>';
 }
 
 function recalcProfit(input) {
@@ -409,23 +467,19 @@ function recalcProfit(input) {
   const expense = parseFloat(input.dataset.expense) || 0;
   const estKg   = parseFloat(input.dataset.est) || 0;
   const plotId  = input.dataset.plot;
-  const profit  = price * estKg - expense;
-  const el      = document.getElementById(`aprofit-${plotId}`);
-  if (!price) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div class="an-row"><span>📈 รายได้ประมาณ</span><strong>${fmt(price * estKg)} บาท</strong></div>
-    <div class="an-row ${profit >= 0 ? 'an-profit' : 'an-loss'}">
-      <span>${profit >= 0 ? '✅ กำไร' : '❌ ขาดทุน'}</span>
-      <strong>${profit >= 0 ? '+' : ''}${fmt(profit)} บาท</strong>
-    </div>
-  `;
+  const d = yieldData(plotId);
+  yieldEstimates[plotId] = { kg: d.kg || estKg, price };
+  document.getElementById(`acalc-${plotId}`).innerHTML =
+    (estKg && price) ? _calcHtml(expense, estKg, price, plotId) : '<p class="an-hint">← กรอกผลผลิต + ราคาเพื่อคำนวณ</p>';
 }
 
 async function saveYieldEstimates() {
   document.querySelectorAll('.yield-input').forEach(inp => {
-    const v = parseFloat(inp.value);
-    if (v > 0) yieldEstimates[inp.dataset.plot] = v;
-    else delete yieldEstimates[inp.dataset.plot];
+    const kg = parseFloat(inp.value);
+    const pid = inp.dataset.plot;
+    const d = yieldData(pid);
+    if (kg > 0) yieldEstimates[pid] = { kg, price: d.price };
+    else delete yieldEstimates[pid];
   });
   const btn = document.getElementById('yield-save-btn');
   btn.disabled = true; btn.textContent = 'กำลังบันทึก...';

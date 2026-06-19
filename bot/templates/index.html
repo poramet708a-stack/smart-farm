@@ -45,11 +45,6 @@
       </div>
     </div>
 
-    <div class="chart-box">
-      <h3>รายรับ vs รายจ่าย (6 เดือนล่าสุด)</h3>
-      <canvas id="chart-monthly"></canvas>
-    </div>
-
     <div class="cards">
       <div class="card">
         <div class="label">🌾 แปลงที่ใช้เงินมากสุด</div>
@@ -61,22 +56,28 @@
       </div>
     </div>
 
-    <!-- Section 2: Plot summary bars -->
+    <!-- 1: ค่าใช้จ่ายสะสมต่อแปลง vs ประเมินรายได้ -->
     <div class="ov-section">
-      <div class="ov-section-title">💸 ค่าใช้จ่ายสะสมต่อแปลง</div>
+      <div class="ov-section-title">💸 ต้นทุนสะสมเทียบกับรายได้ที่ประเมิน</div>
       <div id="ov-plot-bars"></div>
     </div>
 
-    <!-- Section 3: Plot status cards -->
+    <!-- 2: สถานะแปลงทั้งหมด -->
     <div class="ov-section">
       <div class="ov-section-title">🌱 สถานะแปลงทั้งหมด</div>
       <div id="ov-plot-cards" class="ov-plot-cards"></div>
     </div>
 
-    <!-- Section 1: Recent transactions -->
+    <!-- 3: รายการล่าสุด -->
     <div class="ov-section">
       <div class="ov-section-title">🕐 รายการล่าสุด</div>
       <div id="ov-recent"></div>
+    </div>
+
+    <!-- 4: กราฟ 6 เดือน -->
+    <div class="ov-section">
+      <div class="ov-section-title">📊 รายรับ vs รายจ่าย (6 เดือนล่าสุด)</div>
+      <canvas id="chart-monthly"></canvas>
     </div>
 
   </section>
