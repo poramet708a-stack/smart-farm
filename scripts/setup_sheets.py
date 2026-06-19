@@ -21,7 +21,6 @@ SHEETS = {
     'transactions': [
         'id', 'date', 'type', 'category', 'amount',
         'plot_id', 'description', 'recorded_by',
-        'approved_by', 'approved_at', 'status', 'image_url',
     ],
     'plots': [
         'plot_id', 'plot_name', 'crop_type', 'area_rai',

@@ -57,7 +57,7 @@ def save_transaction(
     now    = datetime.now().strftime('%Y-%m-%d %H:%M')
     ws.append_row([
         txn_id, now, txn_type, category, amount,
-        plot_id, '', recorded_by, '', '', 'pending', image_id,
+        plot_id, '', recorded_by,
     ])
     logger.info(f'บันทึก {txn_id}: {txn_type} {amount} บาท แปลง {plot_id}')
     return txn_id
@@ -125,20 +125,19 @@ def get_summary(plot_name: str | None = None) -> dict:
     now     = datetime.now()
     prefix  = now.strftime('%Y-%m')
 
-    approved = [
+    filtered = [
         r for r in records
-        if r.get('status') == 'approved'
-        and str(r.get('date', '')).startswith(prefix)
+        if str(r.get('date', '')).startswith(prefix)
     ]
 
     if plot_name:
         plots    = get_all_plots()
         plot_map = {p['plot_name']: p['plot_id'] for p in plots}
         pid      = plot_map.get(plot_name)
-        approved = [r for r in approved if r.get('plot_id') == pid]
+        filtered = [r for r in filtered if r.get('plot_id') == pid]
 
-    income  = sum(float(r['amount']) for r in approved if r.get('type') == 'รายรับ')
-    expense = sum(float(r['amount']) for r in approved if r.get('type') == 'รายจ่าย')
+    income  = sum(float(r['amount']) for r in filtered if r.get('type') == 'รายรับ')
+    expense = sum(float(r['amount']) for r in filtered if r.get('type') == 'รายจ่าย')
 
     return {
         'month':   prefix,
