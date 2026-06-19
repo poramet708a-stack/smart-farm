@@ -126,7 +126,7 @@ def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: 
             state.update({'category': text, 'step': 'waiting_plot'})
             user_states[user_id] = state
             plots = get_plots()
-            plot_labels = [p['plot_name'] for p in plots]
+            plot_labels = [p['plot_name'] for p in plots][:13]
             _reply(api, token, "แปลงไหนครับ?", _qr(*plot_labels))
         else:
             cats = EXPENSE_CATEGORIES if state.get('type') == 'รายจ่าย' else INCOME_CATEGORIES
@@ -195,7 +195,8 @@ def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: 
         return
 
     _reply(api, token,
-           "ส่งรูปใบเสร็จ หรือพิมพ์จำนวนเงิน เช่น 500\nหรือพิมพ์ 'สรุป' เพื่อดูยอดครับ")
+           "ส่งรูปใบเสร็จ หรือพิมพ์จำนวนเงิน เช่น 500\n"
+           "พิมพ์ 'คำสั่ง' เพื่อดูคู่มือการใช้งานครับ")
 
 
 # ---------------------------------------------------------------------------
