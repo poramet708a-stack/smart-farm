@@ -18,6 +18,7 @@ body {
 }
 .header h1  { font-size: 1.3rem; font-weight: 700; }
 .header .sub { font-size: 0.85rem; opacity: 0.8; }
+.header-logo { width: 52px; height: 52px; border-radius: 12px; object-fit: cover; flex-shrink: 0; }
 
 .btn-add {
   margin-left: auto;
@@ -108,6 +109,29 @@ table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-weight: 600; white-space: nowrap; }
 td { padding: 10px 12px; border-top: 1px solid #f0f0f0; }
 tr:hover td { background: #fafafa; }
+
+/* Transaction row colors */
+.row-income td { background: #f1fdf3; }
+.row-expense td { background: #fff8f8; }
+.row-income:hover td { background: #e6f9ea; }
+.row-expense:hover td { background: #ffeeee; }
+
+/* Type badge */
+.type-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.type-badge.inc { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+.type-badge.exp { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+
+/* Amount cell */
+.amt-cell { text-align: right; font-weight: 700; white-space: nowrap; }
+.amt-inc { color: #1b5e20; }
+.amt-exp { color: #c62828; }
 
 /* Plot selector */
 .plot-toolbar {

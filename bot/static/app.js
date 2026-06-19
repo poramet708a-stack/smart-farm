@@ -813,12 +813,14 @@ function renderTxnTable(tbodyId, txns) {
   if (!tbody) return;
   tbody.innerHTML = '';
   txns.forEach(r => {
+    const isInc = r.type === 'รายรับ';
     const tr = document.createElement('tr');
+    tr.className = isInc ? 'row-income' : 'row-expense';
     tr.innerHTML = `
       <td>${(r.date || '').slice(0, 10)}</td>
-      <td>${r.type}</td>
+      <td><span class="type-badge ${isInc ? 'inc' : 'exp'}">${isInc ? '+ รับ' : '− จ่าย'}</span></td>
       <td>${r.category}</td>
-      <td style="text-align:right">${fmt(r.amount)}</td>
+      <td class="amt-cell ${isInc ? 'amt-inc' : 'amt-exp'}">${isInc ? '+' : '−'}${fmt(r.amount)} ฿</td>
       <td>${r.recorded_by || ''}</td>
       <td><button class="btn-del" onclick="deleteTxn('${r.id}')">ลบ</button></td>
     `;
