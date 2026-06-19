@@ -21,6 +21,7 @@ let currentDayDate = null;
 
 // plot modal state
 let editingPlotId  = null;
+let currentPlotId  = null;
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -207,6 +208,7 @@ function renderPlots() {
 }
 
 function renderPlotDetail(plotId) {
+  currentPlotId = plotId;
   const plot    = allPlots.find(p => p.plot_id === plotId);
   const txns    = allTransactions.filter(r => r.plot_id === plotId);
   const expense = sum(txns, 'รายจ่าย');
@@ -242,6 +244,15 @@ function renderPlotDetail(plotId) {
 // Page 3: Harvest
 // ---------------------------------------------------------------------------
 function renderHarvest() {
+  const totalRev    = allHarvest.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
+  const totalKg     = allHarvest.reduce((s, h) => s + parseFloat(h.quantity_kg   || 0), 0);
+  const totalExpense = sum(allTransactions, 'รายจ่าย');
+  setText('hrv-total-rev',    fmt(totalRev) + ' ฿');
+  setText('hrv-total-kg',     fmt(totalKg)  + ' กก.');
+  const profit = totalRev - totalExpense;
+  const profEl = document.getElementById('hrv-total-profit');
+  if (profEl) { profEl.textContent = fmt(profit) + ' ฿'; profEl.style.color = profit >= 0 ? '#2e7d32' : '#c62828'; }
+
   const tbody = document.querySelector('#harvest-table tbody');
   tbody.innerHTML = '';
   allHarvest.forEach(h => {
@@ -261,8 +272,56 @@ function renderHarvest() {
     tbody.appendChild(tr);
   });
   if (!allHarvest.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการเก็บเกี่ยว</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการเก็บเกี่ยว กด "บันทึกการเก็บเกี่ยว" เพื่อเพิ่ม</td></tr>';
   }
+}
+
+function openHarvestModal() {
+  document.getElementById('harvest-modal').classList.add('open');
+  document.getElementById('harvest-form').reset();
+  document.getElementById('hf-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('hf-plot').innerHTML =
+    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+  document.getElementById('hf-preview-row').style.display = 'none';
+  ['hf-kg', 'hf-price'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateHarvestPreview);
+  });
+}
+function updateHarvestPreview() {
+  const kg    = parseFloat(document.getElementById('hf-kg').value)    || 0;
+  const price = parseFloat(document.getElementById('hf-price').value) || 0;
+  const row   = document.getElementById('hf-preview-row');
+  if (kg && price) {
+    document.getElementById('hf-preview').textContent = fmt(kg * price) + ' ฿';
+    row.style.display = '';
+  } else { row.style.display = 'none'; }
+}
+function closeHarvestModal(e) {
+  if (!e || e.target === document.getElementById('harvest-modal'))
+    document.getElementById('harvest-modal').classList.remove('open');
+}
+async function submitHarvest(e) {
+  e.preventDefault();
+  const btn = document.getElementById('harvest-save-btn');
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await fetch(`${API}/api/harvest`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        plot_id:      document.getElementById('hf-plot').value,
+        harvest_date: document.getElementById('hf-date').value,
+        quantity_kg:  document.getElementById('hf-kg').value,
+        price_per_kg: document.getElementById('hf-price').value,
+        buyer:        document.getElementById('hf-buyer').value,
+        notes:        document.getElementById('hf-notes').value,
+      }),
+    });
+    closeHarvestModal();
+    allHarvest = await fetch(`${API}/api/harvest`).then(r => r.json());
+    renderHarvest();
+    renderOverview();
+  } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
+  finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
 }
 
 // ---------------------------------------------------------------------------
@@ -579,10 +638,18 @@ async function deletePlotConfirm(plotId) {
 // ---------------------------------------------------------------------------
 // Transaction modal
 // ---------------------------------------------------------------------------
-function openModal() {
+function openModal(plotId = null, date = null) {
   document.getElementById('modal-overlay').classList.add('open');
   document.getElementById('txn-form').reset();
   updateCategories();
+  populatePlotSelect();
+  document.getElementById('f-date').value = date || new Date().toISOString().slice(0, 10);
+  if (plotId) document.getElementById('f-plot').value = plotId;
+}
+
+function openTxnFromCalendar() {
+  closeDayModal();
+  openModal(null, currentDayDate);
 }
 
 function closeModal(e) {
@@ -611,6 +678,7 @@ async function submitTxn(e) {
     category:    document.getElementById('f-category').value,
     amount:      document.getElementById('f-amount').value,
     plot_id:     document.getElementById('f-plot').value,
+    date:        document.getElementById('f-date').value,
     recorded_by: document.getElementById('f-by').value || 'เว็บ',
   };
   try {
@@ -621,6 +689,9 @@ async function submitTxn(e) {
     closeModal();
     await loadAll();
     renderOverview();
+    const active = document.querySelector('.plot-btn.active');
+    if (active) renderPlotDetail(active.dataset.plotId);
+    renderCalendar();
     alert(`✅ บันทึกแล้วครับ (${data.txn_id})`);
   } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
   finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }

@@ -73,6 +73,21 @@ def api_harvest():
     return jsonify(get_harvest())
 
 
+@app.route('/api/harvest', methods=['POST'])
+def api_add_harvest():
+    from bot.sheets import save_harvest
+    d = request.get_json()
+    hid = save_harvest(
+        plot_id      = d['plot_id'],
+        quantity_kg  = float(d['quantity_kg']),
+        price_per_kg = float(d['price_per_kg']),
+        buyer        = d.get('buyer', ''),
+        notes        = d.get('notes', ''),
+        harvest_date = d.get('harvest_date'),
+    )
+    return jsonify({'harvest_id': hid})
+
+
 @app.route('/api/plots', methods=['POST'])
 def api_add_plot():
     from bot.sheets import save_plot
@@ -150,6 +165,7 @@ def api_add_transaction():
         plot_id     = data['plot_id'],
         image_id    = '',
         recorded_by = data.get('recorded_by', 'เว็บ'),
+        date        = data.get('date'),
     )
     return jsonify({'txn_id': txn_id})
 

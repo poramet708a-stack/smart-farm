@@ -16,7 +16,6 @@
     <h1>Farm Manager</h1>
     <div class="sub">ระบบจัดการรายรับ-รายจ่ายแปลงเกษตร</div>
   </div>
-  <button class="btn-add" onclick="openModal()">➕ เพิ่มรายการ</button>
 </header>
 
 <nav class="tabs">
@@ -148,6 +147,10 @@
       <canvas id="chart-category"></canvas>
     </div>
 
+    <div class="page-action-bar">
+      <span class="page-action-title" id="plot-txn-title">รายการ</span>
+      <button class="btn-add-inline" onclick="openModal(currentPlotId)">➕ เพิ่มรายการ</button>
+    </div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -163,6 +166,24 @@
 
   <!-- Page 3: Harvest -->
   <section id="page-harvest" class="page">
+    <div class="page-action-bar">
+      <span class="page-action-title">ประวัติการเก็บเกี่ยว</span>
+      <button class="btn-add-inline" onclick="openHarvestModal()">🚜 บันทึกการเก็บเกี่ยว</button>
+    </div>
+    <div class="cards">
+      <div class="card income">
+        <div class="label">💰 รายได้รวม</div>
+        <div class="value" id="hrv-total-rev">—</div>
+      </div>
+      <div class="card">
+        <div class="label">⚖️ ผลผลิตรวม</div>
+        <div class="value" id="hrv-total-kg">—</div>
+      </div>
+      <div class="card profit">
+        <div class="label">✅ กำไรสุทธิ</div>
+        <div class="value" id="hrv-total-profit">—</div>
+      </div>
+    </div>
     <div class="table-wrap">
       <table id="harvest-table">
         <thead>
@@ -211,6 +232,10 @@
     <h2>➕ เพิ่มรายการ</h2>
     <form id="txn-form" onsubmit="submitTxn(event)">
       <div class="form-row">
+        <label>วันที่</label>
+        <input id="f-date" type="date" required>
+      </div>
+      <div class="form-row">
         <label>ประเภท</label>
         <select id="f-type" onchange="updateCategories()" required>
           <option value="รายจ่าย">💸 รายจ่าย</option>
@@ -253,6 +278,7 @@
     </div>
     <div class="form-actions">
       <button type="button" class="btn-cancel" onclick="closeDayModal()">ปิด</button>
+      <button type="button" class="btn-add-inline" onclick="openTxnFromCalendar()" style="flex:1">➕ เพิ่มรายการ</button>
       <button type="button" class="btn-save" id="day-save-btn" onclick="saveDayNote()">บันทึก</button>
     </div>
   </div>
@@ -298,6 +324,47 @@
       <div class="form-actions">
         <button type="button" class="btn-cancel" onclick="closePlotModal()">ยกเลิก</button>
         <button type="submit" class="btn-save" id="plot-save-btn">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: บันทึกการเก็บเกี่ยว -->
+<div id="harvest-modal" class="modal-overlay" onclick="closeHarvestModal(event)">
+  <div class="modal">
+    <h2>🚜 บันทึกการเก็บเกี่ยว</h2>
+    <form id="harvest-form" onsubmit="submitHarvest(event)">
+      <div class="form-row">
+        <label>แปลง</label>
+        <select id="hf-plot" required></select>
+      </div>
+      <div class="form-row">
+        <label>วันที่เก็บเกี่ยว</label>
+        <input id="hf-date" type="date" required>
+      </div>
+      <div class="form-row">
+        <label>ผลผลิต (กก.)</label>
+        <input id="hf-kg" type="number" min="0.1" step="0.1" placeholder="เช่น 500" required>
+      </div>
+      <div class="form-row">
+        <label>ราคา / กก. (บาท)</label>
+        <input id="hf-price" type="number" min="0.01" step="0.01" placeholder="เช่น 8.50" required>
+      </div>
+      <div class="form-row" id="hf-preview-row" style="display:none">
+        <label>รายได้รวม</label>
+        <div id="hf-preview" style="font-size:1.1rem;font-weight:700;color:#2e7d32"></div>
+      </div>
+      <div class="form-row">
+        <label>ผู้รับซื้อ (ไม่บังคับ)</label>
+        <input id="hf-buyer" type="text" placeholder="เช่น โรงสีนายสมชาย">
+      </div>
+      <div class="form-row">
+        <label>หมายเหตุ (ไม่บังคับ)</label>
+        <input id="hf-notes" type="text" placeholder="เช่น ข้าวชื้น">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeHarvestModal()">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="harvest-save-btn">บันทึก</button>
       </div>
     </form>
   </div>

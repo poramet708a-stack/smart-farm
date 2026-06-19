@@ -51,10 +51,11 @@ def save_transaction(
     plot_id: str,
     image_id: str,
     recorded_by: str,
+    date: str | None = None,
 ) -> str:
     ws     = _sheet('transactions')
     txn_id = _next_id('TXN', ws)
-    now    = datetime.now().strftime('%Y-%m-%d %H:%M')
+    now    = (date + ' 00:00') if date else datetime.now().strftime('%Y-%m-%d %H:%M')
     ws.append_row([
         txn_id, now, txn_type, category, amount,
         plot_id, '', recorded_by,
@@ -117,11 +118,12 @@ def get_harvest() -> list[dict]:
     return _sheet('harvest').get_all_records()
 
 
-def save_harvest(plot_id: str, quantity_kg: float, price_per_kg: float, buyer: str, notes: str = '') -> str:
-    ws         = _sheet('harvest')
-    hrv_id     = _next_id('HRV', ws)
-    today      = datetime.now().strftime('%Y-%m-%d')
-    total      = quantity_kg * price_per_kg
+def save_harvest(plot_id: str, quantity_kg: float, price_per_kg: float,
+                 buyer: str, notes: str = '', harvest_date: str | None = None) -> str:
+    ws     = _sheet('harvest')
+    hrv_id = _next_id('HRV', ws)
+    today  = harvest_date or datetime.now().strftime('%Y-%m-%d')
+    total  = quantity_kg * price_per_kg
     ws.append_row([hrv_id, plot_id, today, quantity_kg, price_per_kg, total, buyer, notes])
     return hrv_id
 
