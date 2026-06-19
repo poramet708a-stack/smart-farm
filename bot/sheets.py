@@ -187,6 +187,14 @@ def update_plot(plot_id: str, plot_name: str, crop_type: str, area_rai: float,
     logger.info(f'อัปเดตแปลง {plot_id}')
 
 
+def update_plot_status(plot_id: str, status: str):
+    ws   = _sheet('plots')
+    cell = ws.find(plot_id, in_column=1)
+    if cell:
+        ws.update_cell(cell.row, 7, status)
+        logger.info(f'อัปเดต status แปลง {plot_id} → {status}')
+
+
 def delete_plot(plot_id: str):
     ws   = _sheet('plots')
     cell = ws.find(plot_id, in_column=1)
@@ -244,12 +252,15 @@ def close_harvest_session(session_id: str, end_date: str, destination_type: str,
         return
     # D=end_date, E=status, G=total_kg, H=total_revenue, I=dest_type, J=dest_detail
     # skip F(expected_kg) — update individually to avoid overwriting it
+    plot_id = ws.cell(cell.row, 2).value
     ws.update_cell(cell.row, 4, end_date)
     ws.update_cell(cell.row, 5, 'เสร็จแล้ว')
     ws.update_cell(cell.row, 7, total_kg)
     ws.update_cell(cell.row, 8, total_revenue)
     ws.update_cell(cell.row, 9, destination_type)
     ws.update_cell(cell.row, 10, destination_detail)
+    if plot_id:
+        update_plot_status(plot_id, 'เก็บเกี่ยวแล้ว')
 
 
 def get_harvest_entries() -> list[dict]:

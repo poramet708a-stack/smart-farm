@@ -10,6 +10,9 @@ let allHarvestEntries   = [];
 let allSeasonLogs       = [];
 let charts              = {};
 
+// Plots that are still active (not yet harvested)
+const activePlots = () => allPlots.filter(p => p.status !== 'เก็บเกี่ยวแล้ว');
+
 const EXPENSE_CATS = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ'];
 const INCOME_CATS  = ['ขายข้าว', 'ขายมัน', 'ขายข้าวโพด', 'อื่นๆ'];
 const MONTH_TH     = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
@@ -113,14 +116,15 @@ function renderOverview() {
 function renderOvPlotBars(plotExpense) {
   const el = document.getElementById('ov-plot-bars');
   if (!el) return;
-  if (!allPlots.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
+  const active = activePlots();
+  if (!active.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
 
-  const hasAnyEstimate = allPlots.some(p => {
+  const hasAnyEstimate = active.some(p => {
     const d = yieldData(p.plot_id);
     return d.kg > 0 && d.price > 0;
   });
 
-  el.innerHTML = allPlots.map(p => {
+  el.innerHTML = active.map(p => {
     const expense = plotExpense[p.plot_id] || 0;
     const { kg, price } = yieldData(p.plot_id);
     const estRev  = kg * price;
@@ -168,9 +172,10 @@ function renderOvPlotBars(plotExpense) {
 function renderOvPlotCards() {
   const el = document.getElementById('ov-plot-cards');
   if (!el) return;
-  if (!allPlots.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
+  const active = activePlots();
+  if (!active.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
   const today = new Date();
-  el.innerHTML = allPlots.map(p => {
+  el.innerHTML = active.map(p => {
     const spent   = sum(allTransactions.filter(r => r.plot_id === p.plot_id && r.type === 'รายจ่าย'));
     const harvest = p.expected_harvest ? new Date(p.expected_harvest) : null;
     const days    = harvest ? Math.ceil((harvest - today) / 86400000) : null;
@@ -238,7 +243,8 @@ function renderMonthlyChart(txns) {
 function renderPlots() {
   const container = document.getElementById('plot-buttons');
   container.innerHTML = '';
-  allPlots.forEach((p, i) => {
+  const active = activePlots();
+  active.forEach((p, i) => {
     const btn = document.createElement('button');
     btn.className    = 'plot-btn' + (i === 0 ? ' active' : '');
     btn.textContent  = p.plot_name;
@@ -250,7 +256,7 @@ function renderPlots() {
     });
     container.appendChild(btn);
   });
-  if (allPlots.length) renderPlotDetail(allPlots[0].plot_id);
+  if (active.length) renderPlotDetail(active[0].plot_id);
   else {
     document.getElementById('plot-actions').innerHTML = '';
     setText('plot-name', '');
@@ -379,7 +385,7 @@ function openHarvestSessionModal() {
   document.getElementById('hss-form').reset();
   document.getElementById('hss-start').value = new Date().toISOString().slice(0, 10);
   document.getElementById('hss-plot').innerHTML =
-    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+    activePlots().map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
   document.getElementById('hss-modal').classList.add('open');
 }
 async function submitHarvestSession(e) {
@@ -478,8 +484,12 @@ async function submitCloseSession(e) {
 async function reloadHarvest() {
   allHarvestSessions = [];
   allHarvestEntries  = [];
+  allPlots = await fetch(`${API}/api/plots`).then(r => r.json()).catch(() => allPlots);
   await renderHarvest();
   renderOverview();
+  renderPlots();
+  populatePlotSelect();
+  if (anCurrentPlot) renderAnalysis(anCurrentPlot);
 }
 
 // ── Generic modal closer ──────────────────────────────────
@@ -605,21 +615,24 @@ async function renderAnalysis(plotId) {
     catch { allSeasonLogs = []; }
   }
 
-  if (!plotId) plotId = anCurrentPlot || allPlots[0]?.plot_id;
+  const active = activePlots();
+  if (!plotId || !active.find(pl => pl.plot_id === plotId))
+    plotId = anCurrentPlot && active.find(pl => pl.plot_id === anCurrentPlot)
+             ? anCurrentPlot : active[0]?.plot_id;
   if (!plotId) return;
   anCurrentPlot = plotId;
 
   // Always rebuild buttons so active state and new plots are always correct
   const btnContainer = document.getElementById('an-plot-buttons');
   if (btnContainer) {
-    btnContainer.innerHTML = allPlots.map(p =>
+    btnContainer.innerHTML = active.map(p =>
       `<button class="an-plot-btn${p.plot_id === plotId ? ' active' : ''}"
                onclick="selectAnPlot('${p.plot_id}')">${p.plot_name}</button>`
     ).join('');
   }
 
   const container = document.getElementById('analysis-content');
-  if (!allPlots.length) {
+  if (!active.length) {
     container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
     return;
   }
@@ -1057,7 +1070,7 @@ function updateCategories() {
 
 function populatePlotSelect() {
   document.getElementById('f-plot').innerHTML =
-    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+    activePlots().map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
 }
 
 async function submitTxn(e) {
