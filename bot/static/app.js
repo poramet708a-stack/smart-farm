@@ -110,6 +110,39 @@ function renderOverview() {
   renderOvPlotBars(plotExpense);
   renderOvPlotCards();
   renderOvRecent();
+  renderOvNextHarvest();
+}
+
+function renderOvNextHarvest() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let nearest = null;
+  let minDays = Infinity;
+
+  activePlots().forEach(p => {
+    if (!p.expected_harvest) return;
+    const d = new Date(p.expected_harvest); d.setHours(0, 0, 0, 0);
+    const days = Math.round((d - today) / 86400000);
+    if (days < minDays) { minDays = days; nearest = { plot: p, days }; }
+  });
+
+  const daysEl = document.getElementById('ov-next-harvest-days');
+  const nameEl = document.getElementById('ov-next-harvest-name');
+  if (!nearest) {
+    if (daysEl) daysEl.textContent = '—';
+    if (nameEl) nameEl.textContent = '';
+    return;
+  }
+
+  const { plot, days } = nearest;
+  let label, color;
+  if (days < 0)       { label = `เลย ${Math.abs(days)} วัน`; color = '#c62828'; }
+  else if (days === 0) { label = 'วันนี้!';                   color = '#c62828'; }
+  else if (days <= 7)  { label = `อีก ${days} วัน`;          color = '#e65100'; }
+  else if (days <= 30) { label = `อีก ${days} วัน`;          color = '#f57f17'; }
+  else                 { label = `อีก ${days} วัน`;          color = '#2e7d32'; }
+
+  if (daysEl) { daysEl.textContent = label; daysEl.style.color = color; }
+  if (nameEl) nameEl.textContent = plot.plot_name;
 }
 
 function renderOvPlotBars(plotExpense) {
