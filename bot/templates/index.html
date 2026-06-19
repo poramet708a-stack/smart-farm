@@ -20,9 +20,8 @@
 
 <nav class="tabs">
   <button class="tab-btn active" data-page="page-overview">📊 ภาพรวม</button>
-  <button class="tab-btn"        data-page="page-plots">🌱 รายแปลง</button>
+  <button class="tab-btn"        data-page="page-plots">🌱 แปลง</button>
   <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
-  <button class="tab-btn"        data-page="page-analysis">📈 วิเคราะห์</button>
   <button class="tab-btn"        data-page="page-calendar">📅 ปฏิทิน</button>
 </nav>
 
@@ -82,87 +81,13 @@
 
   </section>
 
-  <!-- Page 2: Per Plot -->
+  <!-- Page 2: แปลง (รายแปลง + วิเคราะห์ รวมกัน) -->
   <section id="page-plots" class="page">
     <div class="plot-toolbar">
       <div id="plot-buttons" class="plot-select"></div>
       <button class="btn-new-plot" onclick="openPlotModal()">➕ เพิ่มแปลง</button>
     </div>
-
-    <div class="plot-header-row">
-      <div class="plot-detail-name" id="plot-name"></div>
-      <div class="plot-actions" id="plot-actions"></div>
-    </div>
-
-    <div class="cards">
-      <div class="card">
-        <div class="label">🌱 พืช</div>
-        <div class="value" style="font-size:1rem" id="plot-crop">—</div>
-      </div>
-      <div class="card">
-        <div class="label">📐 พื้นที่</div>
-        <div class="value" style="font-size:1rem" id="plot-area">—</div>
-      </div>
-      <div class="card">
-        <div class="label">📅 วันปลูก</div>
-        <div class="value" style="font-size:1rem" id="plot-start">—</div>
-      </div>
-      <div class="card">
-        <div class="label">🚜 เก็บเกี่ยว</div>
-        <div class="value" style="font-size:1rem" id="plot-harvest-date">—</div>
-      </div>
-    </div>
-
-    <div class="cards">
-      <div class="card expense">
-        <div class="label">💸 ต้นทุนรวม</div>
-        <div class="value" id="plot-cost">—</div>
-      </div>
-      <div class="card">
-        <div class="label">💸/ไร่</div>
-        <div class="value" id="plot-cost-rai">—</div>
-      </div>
-      <div class="card income">
-        <div class="label">💰 รายรับรวม</div>
-        <div class="value" id="plot-income">—</div>
-      </div>
-      <div class="card profit">
-        <div class="label">✅ กำไร</div>
-        <div class="value" id="plot-profit">—</div>
-      </div>
-    </div>
-
-    <div class="cards">
-      <div class="card">
-        <div class="label">📌 สถานะ</div>
-        <div class="value" style="font-size:1rem" id="plot-status">—</div>
-      </div>
-      <div class="card">
-        <div class="label">📝 หมายเหตุ</div>
-        <div class="value" style="font-size:0.85rem" id="plot-notes-text">—</div>
-      </div>
-    </div>
-
-    <div class="chart-box">
-      <h3>ต้นทุนแยกหมวด</h3>
-      <canvas id="chart-category"></canvas>
-    </div>
-
-    <div class="page-action-bar">
-      <span class="page-action-title" id="plot-txn-title">รายการ</span>
-      <button class="btn-add-inline" onclick="openModal(currentPlotId)">➕ เพิ่มรายการ</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>วันที่</th><th>ประเภท</th><th>หมวด</th>
-            <th>ยอด (บาท)</th><th>บันทึกโดย</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="plot-txn-table"></tbody>
-      </table>
-    </div>
+    <div id="plot-content"><div class="loading">กำลังโหลด...</div></div>
   </section>
 
   <!-- Page 3: Harvest -->
@@ -204,17 +129,7 @@
     </div>
   </section>
 
-  <!-- Page 4: Analysis + Season (merged) -->
-  <section id="page-analysis" class="page">
-    <div class="plot-toolbar" style="margin-bottom:12px">
-      <div id="an-plot-buttons" class="plot-select"></div>
-    </div>
-    <div id="analysis-content">
-      <div class="loading">กำลังโหลด...</div>
-    </div>
-  </section>
-
-  <!-- Page 5: Calendar -->
+  <!-- Page 4: Calendar -->
   <section id="page-calendar" class="page">
     <div class="cal-toolbar">
       <select id="cal-plot-filter" class="cal-plot-sel">

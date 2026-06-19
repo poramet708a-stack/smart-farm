@@ -151,7 +151,10 @@ tr:hover td { background: #fafafa; }
   font-size: 0.9rem;
   font-family: inherit;
 }
+.plot-btn:hover:not(.active) { background: #e8f5e9; }
 .plot-btn.active { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+.plot-btn.done   { border-color: #bdbdbd; color: #888; }
+.plot-btn.done.active { background: #616161; border-color: #616161; color: #fff; }
 
 .btn-new-plot {
   padding: 8px 16px;
