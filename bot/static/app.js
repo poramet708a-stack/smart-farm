@@ -668,10 +668,13 @@ async function renderPlotsPage(plotId) {
   const btnContainer = document.getElementById('plot-buttons');
   if (btnContainer) {
     btnContainer.innerHTML = active.map(p =>
-      `<button class="plot-btn${p.plot_id === plotId ? ' active' : ''}"
-               data-plot-id="${p.plot_id}"
+      `<button class="plot-btn" data-plot-id="${p.plot_id}"
                onclick="selectPlot('${p.plot_id}')">${p.plot_name}</button>`
     ).join('');
+    // Set active separately to avoid any string-comparison quirk in template literal
+    btnContainer.querySelectorAll('.plot-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.plotId === String(plotId))
+    );
   }
 
   const container = document.getElementById('plot-content');
@@ -730,7 +733,7 @@ async function renderPlotsPage(plotId) {
         <button class="btn-edit-notes" title="แก้ไขเหตุผล"
           onclick="openNotesModal('${r.id}','${r.category}','${(r.date||'').slice(0,10)}','${notes.replace(/'/g,"\\'")}')">✏️</button>
       </td>
-      <td>${!isDone ? `<button class="btn-del" onclick="deleteTxnOnPlots('${r.id}')">ลบ</button>` : ''}</td>
+      <td><button class="btn-del" onclick="deleteTxnOnPlots('${r.id}')">ลบ</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">ยังไม่มีรายการ</td></tr>';
 
@@ -744,7 +747,7 @@ async function renderPlotsPage(plotId) {
       <div class="sl-card-head">
         <strong>${l.season_name}</strong>
         <span style="color:#888;font-size:0.8rem">${l.start_date}${l.end_date ? ' → '+l.end_date : ' → ปัจจุบัน'}</span>
-        ${!isDone ? `<button class="btn-del" onclick="deleteSeasonLog('${l.log_id}')">ลบ</button>` : ''}
+        <button class="btn-del" onclick="deleteSeasonLog('${l.log_id}')">ลบ</button>
       </div>
       <div class="sl-grid">
         <div class="sl-stat"><div class="sl-stat-l">🌾 ผลผลิต</div><strong>${fmt(l.yield_kg||0)} กก.</strong></div>
