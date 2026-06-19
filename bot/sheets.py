@@ -206,9 +206,14 @@ def close_harvest_session(session_id: str, end_date: str, destination_type: str,
     cell = ws.find(session_id, in_column=1)
     if not cell:
         return
-    ws.update(f'D{cell.row}:J{cell.row}',
-              [[end_date, 'เสร็จแล้ว', '', total_kg, total_revenue,
-                destination_type, destination_detail]])
+    # D=end_date, E=status, G=total_kg, H=total_revenue, I=dest_type, J=dest_detail
+    # skip F(expected_kg) — update individually to avoid overwriting it
+    ws.update_cell(cell.row, 4, end_date)
+    ws.update_cell(cell.row, 5, 'เสร็จแล้ว')
+    ws.update_cell(cell.row, 7, total_kg)
+    ws.update_cell(cell.row, 8, total_revenue)
+    ws.update_cell(cell.row, 9, destination_type)
+    ws.update_cell(cell.row, 10, destination_detail)
 
 
 def get_harvest_entries() -> list[dict]:
