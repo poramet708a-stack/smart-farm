@@ -529,7 +529,20 @@ tr:hover td { background: #fafafa; }
 }
 .btn-edit-notes:hover { opacity: 1; }
 
-.an-plot-btn { }  /* inherits .plot-btn */
+.an-plot-btn {
+  padding: 8px 16px;
+  border: 2px solid #c8e6c9;
+  border-radius: 20px;
+  background: #fff;
+  color: #2e7d32;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background .2s, color .2s;
+}
+.an-plot-btn.active { background: #2e7d32; color: #fff; border-color: #2e7d32; }
+.an-plot-btn:hover:not(.active) { background: #e8f5e9; }
 
 /* ===== Harvest Sessions ===== */
 .hss-card {

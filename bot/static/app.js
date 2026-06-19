@@ -605,23 +605,18 @@ async function renderAnalysis(plotId) {
     catch { allSeasonLogs = []; }
   }
 
-  // Build plot selector buttons
-  const btnContainer = document.getElementById('an-plot-buttons');
-  if (btnContainer && !btnContainer.querySelector('.an-plot-btn')) {
-    btnContainer.innerHTML = allPlots.map(p =>
-      `<button class="an-plot-btn plot-btn${!anCurrentPlot && allPlots[0].plot_id === p.plot_id ? ' active' : ''}"
-               data-plot-id="${p.plot_id}" onclick="selectAnPlot('${p.plot_id}')">${p.plot_name}</button>`
-    ).join('');
-  }
-
   if (!plotId) plotId = anCurrentPlot || allPlots[0]?.plot_id;
   if (!plotId) return;
   anCurrentPlot = plotId;
 
-  // Mark active button
-  document.querySelectorAll('.an-plot-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.plotId === plotId);
-  });
+  // Always rebuild buttons so active state and new plots are always correct
+  const btnContainer = document.getElementById('an-plot-buttons');
+  if (btnContainer) {
+    btnContainer.innerHTML = allPlots.map(p =>
+      `<button class="an-plot-btn${p.plot_id === plotId ? ' active' : ''}"
+               onclick="selectAnPlot('${p.plot_id}')">${p.plot_name}</button>`
+    ).join('');
+  }
 
   const container = document.getElementById('analysis-content');
   if (!allPlots.length) {
