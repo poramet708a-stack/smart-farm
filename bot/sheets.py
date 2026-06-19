@@ -403,6 +403,88 @@ def save_activity(date: str, note: str):
 
 
 # ---------------------------------------------------------------------------
+# Data migration: fix duplicate plot_ids
+# ---------------------------------------------------------------------------
+
+def fix_duplicate_plot_ids() -> dict:
+    """
+    Find plots that share a plot_id, assign new unique IDs to duplicates,
+    and update all references in transactions / harvest_sessions /
+    harvest_entries / season_log / harvest sheets.
+    """
+    ws    = _sheet('plots')
+    rows  = ws.get_all_values()   # row 0 = header
+    if len(rows) < 2:
+        return {'fixed': 0, 'message': 'no data rows'}
+
+    # Collect all existing IDs to avoid generating a new one that already exists
+    all_ids: set[str] = {row[0] for row in rows[1:] if row and row[0]}
+
+    # Walk rows; mark duplicates
+    seen_in_run: set[str] = set()
+    renames: list[tuple[int, str, str]] = []   # (sheet_row, old_id, new_id)
+    max_n = 0
+    for pid in all_ids:
+        if pid.startswith('PLOT-'):
+            try:
+                max_n = max(max_n, int(pid[5:]))
+            except ValueError:
+                pass
+
+    for i, row in enumerate(rows[1:], start=2):   # 2 = first data row (1-based)
+        if not row or not row[0]:
+            continue
+        old_id = row[0]
+        if old_id in seen_in_run:
+            # Duplicate — assign the next available ID
+            while True:
+                max_n += 1
+                new_id = f'PLOT-{max_n:04d}'
+                if new_id not in all_ids:
+                    break
+            all_ids.add(new_id)
+            renames.append((i, old_id, new_id))
+        else:
+            seen_in_run.add(old_id)
+
+    if not renames:
+        return {'fixed': 0, 'message': 'no duplicates found'}
+
+    # sheet_name → (column index of plot_id, ensure_headers or None)
+    REF_SHEETS = {
+        'transactions':     (6,  None),
+        'harvest':          (2,  None),
+        'harvest_sessions': (2,  _HSS_HDR),
+        'harvest_entries':  (3,  _HEN_HDR),
+        'season_log':       (2,  _SL_HDR),
+    }
+
+    results = []
+    for sheet_row, old_id, new_id in renames:
+        # 1. Rename the plot row itself
+        ws.update_cell(sheet_row, 1, new_id)
+        logger.info(f'fix_ids: row {sheet_row} {old_id} → {new_id}')
+
+        # 2. Update references in every related sheet
+        for sname, (col, hdrs) in REF_SHEETS.items():
+            try:
+                ref_ws = _ensure_sheet(sname, hdrs) if hdrs else _sheet(sname)
+                cells  = ref_ws.findall(old_id, in_column=col)
+                for cell in cells:
+                    ref_ws.update_cell(cell.row, col, new_id)
+                    logger.info(f'  updated {sname} row {cell.row}')
+            except Exception as exc:
+                logger.warning(f'  fix_ids: {sname} skipped — {exc}')
+
+        results.append({'old': old_id, 'new': new_id, 'row': sheet_row})
+
+    # Invalidate cache so next read sees the updated IDs
+    _ws.pop('plots', None)
+
+    return {'fixed': len(renames), 'renames': results}
+
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

@@ -207,6 +207,17 @@ tr:hover td { background: #fafafa; }
   white-space: nowrap;
 }
 .btn-new-plot:hover { background: #1b5e20; }
+.btn-fix-ids {
+  padding: 8px 10px;
+  border: 1px solid #bdbdbd;
+  border-radius: 20px;
+  background: #f5f5f5;
+  color: #757575;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.btn-fix-ids:hover { background: #e0e0e0; }
 
 .plot-header-row {
   display: flex;

@@ -851,6 +851,27 @@ async function deleteTxnOnPlots(txnId) {
   renderPlotsPage(currentPlotId);
 }
 
+async function fixPlotIds() {
+  const btn = document.querySelector('.btn-fix-ids');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const result = await fetch(`${API}/api/admin/fix-plot-ids`, { method: 'POST' }).then(r => r.json());
+    if (result.fixed > 0) {
+      alert(`✅ แก้ไข ${result.fixed} ID ซ้ำเรียบร้อย กำลังโหลดข้อมูลใหม่...`);
+      await loadAll();
+      renderOverview();
+      await renderPlotsPage();
+      populatePlotSelect();
+    } else {
+      alert('✅ ไม่พบ ID ซ้ำ ข้อมูลปกติแล้ว');
+    }
+  } catch (e) {
+    alert('เกิดข้อผิดพลาด: ' + e);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔧'; }
+  }
+}
+
 function _calcHtml(expense, estKg, estPrice, plotId) {
   const breakEven = estKg > 0 ? expense / estKg : 0;
   const revenue   = estKg * estPrice;

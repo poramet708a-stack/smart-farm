@@ -269,6 +269,13 @@ def api_delete_transaction(txn_id):
     return jsonify({'ok': True})
 
 
+@app.route('/api/admin/fix-plot-ids', methods=['POST'])
+def api_fix_plot_ids():
+    from bot.sheets import fix_duplicate_plot_ids
+    result = fix_duplicate_plot_ids()
+    return jsonify(result)
+
+
 @app.route('/')
 def dashboard():
     from flask import render_template
