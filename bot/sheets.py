@@ -63,6 +63,16 @@ def save_transaction(
     return txn_id
 
 
+def delete_transaction(txn_id: str):
+    ws   = _sheet('transactions')
+    cell = ws.find(txn_id, in_column=1)
+    if not cell:
+        logger.warning(f'ไม่พบ {txn_id}')
+        return
+    ws.delete_rows(cell.row)
+    logger.info(f'ลบ {txn_id}')
+
+
 def update_transaction_status(txn_id: str, status: str, approved_by: str):
     ws   = _sheet('transactions')
     cell = ws.find(txn_id, in_column=1)

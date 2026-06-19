@@ -73,6 +73,28 @@ def api_harvest():
     return jsonify(get_harvest())
 
 
+@app.route('/api/transactions', methods=['POST'])
+def api_add_transaction():
+    from bot.sheets import save_transaction
+    data = request.get_json()
+    txn_id = save_transaction(
+        txn_type    = data['type'],
+        category    = data['category'],
+        amount      = float(data['amount']),
+        plot_id     = data['plot_id'],
+        image_id    = '',
+        recorded_by = data.get('recorded_by', 'เว็บ'),
+    )
+    return jsonify({'txn_id': txn_id})
+
+
+@app.route('/api/transactions/<txn_id>', methods=['DELETE'])
+def api_delete_transaction(txn_id):
+    from bot.sheets import delete_transaction
+    delete_transaction(txn_id)
+    return jsonify({'ok': True})
+
+
 @app.route('/')
 def dashboard():
     from flask import render_template

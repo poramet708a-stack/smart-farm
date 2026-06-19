@@ -1,10 +1,12 @@
-// API base (same origin when served by Flask)
 const API = '';
 
 let allPlots = [];
 let allTransactions = [];
 let allHarvest = [];
 let charts = {};
+
+const EXPENSE_CATS = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ'];
+const INCOME_CATS  = ['ขายข้าว', 'ขายมัน', 'ขายข้าวโพด', 'อื่นๆ'];
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -13,6 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAll();
   renderOverview();
   setupTabs();
+  updateCategories();
+  populatePlotSelect();
 });
 
 async function loadAll() {
@@ -49,9 +53,8 @@ function setupTabs() {
 // Page 1: Overview
 // ---------------------------------------------------------------------------
 function renderOverview() {
-  const approved = allTransactions.filter(r => r.status === 'approved');
-  const month    = new Date().toISOString().slice(0, 7);
-  const thisMonth = approved.filter(r => (r.date || '').startsWith(month));
+  const month     = new Date().toISOString().slice(0, 7);
+  const thisMonth = allTransactions.filter(r => (r.date || '').startsWith(month));
 
   const income  = sum(thisMonth, 'รายรับ');
   const expense = sum(thisMonth, 'รายจ่าย');
@@ -60,25 +63,20 @@ function renderOverview() {
   setText('ov-income',  fmt(income));
   setText('ov-expense', fmt(expense));
   setText('ov-profit',  fmt(profit));
+  setText('ov-count',   thisMonth.length);
 
-  // Monthly bar chart (last 6 months)
-  renderMonthlyChart(approved);
+  renderMonthlyChart(allTransactions);
 
-  // Top spending plot
-  const plotExpense = groupByPlot(approved.filter(r => r.type === 'รายจ่าย'));
+  const plotExpense = groupByPlot(allTransactions.filter(r => r.type === 'รายจ่าย'));
   const topPlot     = topEntry(plotExpense);
   if (topPlot) {
     const name = allPlots.find(p => p.plot_id === topPlot[0])?.plot_name || topPlot[0];
     setText('ov-top-plot', `${name} (${fmt(topPlot[1])} บาท)`);
   }
-
-  // Pending list
-  const pending = allTransactions.filter(r => r.status === 'pending');
-  setText('ov-pending', pending.length);
 }
 
 function renderMonthlyChart(txns) {
-  const months = lastNMonths(6);
+  const months   = lastNMonths(6);
   const incomes  = months.map(m => sum(txns.filter(r => r.date?.startsWith(m)), 'รายรับ'));
   const expenses = months.map(m => sum(txns.filter(r => r.date?.startsWith(m)), 'รายจ่าย'));
 
@@ -121,7 +119,7 @@ function renderPlots() {
 
 function renderPlotDetail(plotId) {
   const plot    = allPlots.find(p => p.plot_id === plotId);
-  const txns    = allTransactions.filter(r => r.plot_id === plotId && r.status === 'approved');
+  const txns    = allTransactions.filter(r => r.plot_id === plotId);
   const expense = sum(txns, 'รายจ่าย');
   const income  = sum(txns, 'รายรับ');
   const area    = parseFloat(plot?.area_rai) || 1;
@@ -136,14 +134,12 @@ function renderPlotDetail(plotId) {
   setText('plot-income',       fmt(income));
   setText('plot-profit',       fmt(income - expense));
 
-  // Category doughnut
   const catMap = {};
   txns.filter(r => r.type === 'รายจ่าย').forEach(r => {
     catMap[r.category] = (catMap[r.category] || 0) + parseFloat(r.amount);
   });
   renderDoughnut('chart-category', Object.keys(catMap), Object.values(catMap));
 
-  // Transaction table
   renderTxnTable('plot-txn-table', txns.slice(-20).reverse());
 }
 
@@ -155,9 +151,9 @@ function renderHarvest() {
   tbody.innerHTML = '';
 
   allHarvest.forEach(h => {
-    const plot = allPlots.find(p => p.plot_id === h.plot_id);
-    const txns = allTransactions.filter(r => r.plot_id === h.plot_id && r.status === 'approved');
-    const cost = sum(txns, 'รายจ่าย');
+    const plot   = allPlots.find(p => p.plot_id === h.plot_id);
+    const txns   = allTransactions.filter(r => r.plot_id === h.plot_id);
+    const cost   = sum(txns, 'รายจ่าย');
     const profit = parseFloat(h.total_revenue) - cost;
 
     const tr = document.createElement('tr');
@@ -179,18 +175,17 @@ function renderHarvest() {
 }
 
 // ---------------------------------------------------------------------------
-// Page 4: Analysis (Break-even)
+// Page 4: Analysis
 // ---------------------------------------------------------------------------
 function renderAnalysis() {
   const container = document.getElementById('analysis-content');
   container.innerHTML = '';
 
   allPlots.forEach(p => {
-    const txns    = allTransactions.filter(r => r.plot_id === p.plot_id && r.status === 'approved');
+    const txns    = allTransactions.filter(r => r.plot_id === p.plot_id);
     const expense = sum(txns, 'รายจ่าย');
     const area    = parseFloat(p.area_rai) || 1;
 
-    // Typical yield estimates (kg/rai) per crop
     const yieldMap = { 'ข้าว': 500, 'มันสำปะหลัง': 3500, 'ข้าวโพด': 800 };
     const estYield = (yieldMap[p.crop_type] || 500) * area;
     const breakEvenPrice = estYield > 0 ? expense / estYield : 0;
@@ -209,6 +204,84 @@ function renderAnalysis() {
 
   if (!allPlots.length) {
     container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modal: เพิ่มรายการ
+// ---------------------------------------------------------------------------
+function openModal() {
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('txn-form').reset();
+  updateCategories();
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+}
+
+function updateCategories() {
+  const type = document.getElementById('f-type').value;
+  const cats = type === 'รายจ่าย' ? EXPENSE_CATS : INCOME_CATS;
+  const sel  = document.getElementById('f-category');
+  sel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function populatePlotSelect() {
+  const sel = document.getElementById('f-plot');
+  sel.innerHTML = allPlots.map(p =>
+    `<option value="${p.plot_id}">${p.plot_name}</option>`
+  ).join('');
+}
+
+async function submitTxn(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true;
+  btn.textContent = 'กำลังบันทึก...';
+
+  const body = {
+    type:        document.getElementById('f-type').value,
+    category:    document.getElementById('f-category').value,
+    amount:      document.getElementById('f-amount').value,
+    plot_id:     document.getElementById('f-plot').value,
+    recorded_by: document.getElementById('f-by').value || 'เว็บ',
+  };
+
+  try {
+    const res = await fetch(`${API}/api/transactions`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    const data = await res.json();
+    closeModal();
+    await loadAll();
+    renderOverview();
+    alert(`✅ บันทึกแล้วครับ (${data.txn_id})`);
+  } catch {
+    alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'บันทึก';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delete transaction
+// ---------------------------------------------------------------------------
+async function deleteTxn(txnId) {
+  if (!confirm(`ลบรายการ ${txnId} ใช่ไหมครับ?`)) return;
+  try {
+    await fetch(`${API}/api/transactions/${txnId}`, { method: 'DELETE' });
+    await loadAll();
+    renderOverview();
+    const active = document.querySelector('.plot-btn.active');
+    if (active) renderPlotDetail(active.dataset.plotId);
+  } catch {
+    alert('เกิดข้อผิดพลาด ลองใหม่อีกครั้งครับ');
   }
 }
 
@@ -241,7 +314,7 @@ function lastNMonths(n) {
 }
 
 function shortMonth(ym) {
-  const [y, m] = ym.split('-');
+  const [, m] = ym.split('-');
   const names = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   return names[parseInt(m, 10) - 1];
 }
@@ -284,8 +357,8 @@ function renderTxnTable(tbodyId, txns) {
       <td>${r.type}</td>
       <td>${r.category}</td>
       <td style="text-align:right">${fmt(r.amount)}</td>
-      <td>${r.recorded_by}</td>
-      <td><span class="badge ${r.status}">${r.status}</span></td>
+      <td>${r.recorded_by || ''}</td>
+      <td><button class="btn-del" onclick="deleteTxn('${r.id}')">ลบ</button></td>
     `;
     tbody.appendChild(tr);
   });

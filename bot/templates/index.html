@@ -16,6 +16,7 @@
     <h1>Farm Manager</h1>
     <div class="sub">ระบบจัดการรายรับ-รายจ่ายแปลงเกษตร</div>
   </div>
+  <button class="btn-add" onclick="openModal()">➕ เพิ่มรายการ</button>
 </header>
 
 <nav class="tabs">
@@ -55,8 +56,8 @@
         <div class="value" style="font-size:1rem" id="ov-top-plot">—</div>
       </div>
       <div class="card">
-        <div class="label">⏳ รออนุมัติ</div>
-        <div class="value" id="ov-pending">—</div>
+        <div class="label">📝 รายการเดือนนี้</div>
+        <div class="value" id="ov-count">—</div>
       </div>
     </div>
   </section>
@@ -113,7 +114,7 @@
         <thead>
           <tr>
             <th>วันที่</th><th>ประเภท</th><th>หมวด</th>
-            <th>ยอด (บาท)</th><th>บันทึกโดย</th><th>สถานะ</th>
+            <th>ยอด (บาท)</th><th>บันทึกโดย</th><th></th>
           </tr>
         </thead>
         <tbody id="plot-txn-table"></tbody>
@@ -144,6 +145,42 @@
   </section>
 
 </main>
+
+<!-- Modal: เพิ่มรายการ -->
+<div id="modal-overlay" class="modal-overlay" onclick="closeModal(event)">
+  <div class="modal">
+    <h2>➕ เพิ่มรายการ</h2>
+    <form id="txn-form" onsubmit="submitTxn(event)">
+      <div class="form-row">
+        <label>ประเภท</label>
+        <select id="f-type" onchange="updateCategories()" required>
+          <option value="รายจ่าย">💸 รายจ่าย</option>
+          <option value="รายรับ">💰 รายรับ</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>หมวดหมู่</label>
+        <select id="f-category" required></select>
+      </div>
+      <div class="form-row">
+        <label>ยอดเงิน (บาท)</label>
+        <input id="f-amount" type="number" min="1" max="9999999" placeholder="เช่น 1200" required>
+      </div>
+      <div class="form-row">
+        <label>แปลง</label>
+        <select id="f-plot" required></select>
+      </div>
+      <div class="form-row">
+        <label>บันทึกโดย</label>
+        <input id="f-by" type="text" placeholder="ชื่อ (ไม่บังคับ)">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-cancel" onclick="closeModal()">ยกเลิก</button>
+        <button type="submit" class="btn-save" id="btn-save">บันทึก</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="/static/app.js"></script>
