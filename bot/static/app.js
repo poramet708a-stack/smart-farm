@@ -594,7 +594,8 @@ let editingZoneId  = null;
 let mapCanvas, mapCtx;
 const BASE_CELL_PX = 28;
 
-function getCellPx() { return Math.max(8, Math.round(BASE_CELL_PX * zoomLevel)); }
+function getCellPx()    { return Math.max(8, Math.round(BASE_CELL_PX * zoomLevel)); }
+function zoneColor(zid) { return mapZoneLabels[zid]?.color || ZONES[zid]?.color || '#f5f5f5'; }
 
 function renderMapPage() {
   if (!mapInitialized) {
@@ -634,9 +635,10 @@ function buildZoneToolbar() {
     const plotName = info.plot_id ? (allPlots.find(p => p.plot_id === info.plot_id)?.plot_name || '') : '';
     const editBtn  = (z.id > 0 && z.id < 7)
       ? `<span class="zone-edit-icon" onclick="event.stopPropagation();openZoneEdit(${z.id})">✏️</span>` : '';
+    const col = zoneColor(z.id);
     return `<button class="zone-btn${z.id === selectedZone ? ' active' : ''}"
               id="zone-btn-${z.id}"
-              style="background:${z.color};border-color:${z.border}"
+              style="background:${col};border-color:${z.border}"
               onclick="selectZone(${z.id})">
       <span class="zone-icon">${z.emoji}</span>
       <span class="zone-name">${label}</span>
@@ -653,38 +655,89 @@ function selectZone(id) {
 }
 
 function setupMapEvents() {
-  const getPos = e => {
+  let dragStart      = null;
+  let savedImageData = null;
+  let lastCell       = null;
+
+  const getCellAt = e => {
     const rect   = mapCanvas.getBoundingClientRect();
-    const src    = e.touches ? e.touches[0] : e;
+    const src    = e.changedTouches?.[0] || e.touches?.[0] || e;
     const scaleX = mapCanvas.width  / rect.width;
     const scaleY = mapCanvas.height / rect.height;
-    return { x: (src.clientX - rect.left) * scaleX, y: (src.clientY - rect.top) * scaleY };
+    const x = (src.clientX - rect.left) * scaleX;
+    const y = (src.clientY - rect.top)  * scaleY;
+    const cp = getCellPx();
+    return {
+      c: Math.max(0, Math.min(mapCols - 1, Math.floor(x / cp))),
+      r: Math.max(0, Math.min(mapRows - 1, Math.floor(y / cp))),
+    };
   };
-  const paint = e => {
-    const { x, y } = getPos(e);
+
+  const drawPreview = (s, end) => {
+    if (!savedImageData) return;
+    mapCtx.putImageData(savedImageData, 0, 0);
     const cp   = getCellPx();
-    const c    = Math.floor(x / cp);
-    const r    = Math.floor(y / cp);
-    if (c < 0 || c >= mapCols || r < 0 || r >= mapRows) return;
     const zone = selectedZone === 7 ? 0 : selectedZone;
-    const idx  = r * mapCols + c;
-    if (mapGrid[idx] === zone) return;
-    mapGrid[idx] = zone;
-    const z = ZONES[zone];
-    mapCtx.fillStyle   = z.color;
-    mapCtx.fillRect(c * cp, r * cp, cp, cp);
+    const z    = ZONES[zone];
+    const r1 = Math.min(s.r, end.r), r2 = Math.max(s.r, end.r);
+    const c1 = Math.min(s.c, end.c), c2 = Math.max(s.c, end.c);
+    mapCtx.globalAlpha = 0.55;
+    mapCtx.fillStyle   = zoneColor(zone);
+    mapCtx.fillRect(c1 * cp, r1 * cp, (c2 - c1 + 1) * cp, (r2 - r1 + 1) * cp);
+    mapCtx.globalAlpha = 1;
     mapCtx.strokeStyle = z.border;
-    mapCtx.lineWidth   = 0.5;
-    mapCtx.strokeRect(c * cp + 0.5, r * cp + 0.5, cp - 1, cp - 1);
-    updateMapLegend();
+    mapCtx.lineWidth   = 2;
+    mapCtx.strokeRect(c1 * cp + 1, r1 * cp + 1, (c2 - c1 + 1) * cp - 2, (r2 - r1 + 1) * cp - 2);
   };
-  mapCanvas.addEventListener('mousedown',  e => { isPainting = true;  paint(e); });
-  mapCanvas.addEventListener('mousemove',  e => { if (isPainting) paint(e); });
-  mapCanvas.addEventListener('mouseup',    () => isPainting = false);
-  mapCanvas.addEventListener('mouseleave', () => isPainting = false);
-  mapCanvas.addEventListener('touchstart',  e => { e.preventDefault(); isPainting = true;  paint(e); }, { passive:false });
-  mapCanvas.addEventListener('touchmove',   e => { e.preventDefault(); if (isPainting) paint(e); }, { passive:false });
-  mapCanvas.addEventListener('touchend',    () => isPainting = false);
+
+  const doFill = (s, end) => {
+    const zone = selectedZone === 7 ? 0 : selectedZone;
+    const r1 = Math.min(s.r, end.r), r2 = Math.max(s.r, end.r);
+    const c1 = Math.min(s.c, end.c), c2 = Math.max(s.c, end.c);
+    for (let r = r1; r <= r2; r++)
+      for (let c = c1; c <= c2; c++)
+        mapGrid[r * mapCols + c] = zone;
+    redrawMap();
+  };
+
+  const onStart = e => {
+    closeCellInfo();
+    isPainting     = true;
+    dragStart      = getCellAt(e);
+    lastCell       = { ...dragStart };
+    savedImageData = mapCtx.getImageData(0, 0, mapCanvas.width, mapCanvas.height);
+  };
+  const onMove = e => {
+    if (!isPainting) return;
+    lastCell = getCellAt(e);
+    if (lastCell.r !== dragStart.r || lastCell.c !== dragStart.c)
+      drawPreview(dragStart, lastCell);
+  };
+  const onEnd = e => {
+    if (!isPainting) return;
+    isPainting      = false;
+    const endCell   = e ? getCellAt(e) : lastCell;
+    if (!endCell || !dragStart) return;
+    if (endCell.r === dragStart.r && endCell.c === dragStart.c) {
+      if (savedImageData) mapCtx.putImageData(savedImageData, 0, 0);
+      openCellInfo(dragStart);
+    } else {
+      doFill(dragStart, endCell);
+    }
+    dragStart = null; savedImageData = null;
+  };
+  const onCancel = () => {
+    if (isPainting && savedImageData) mapCtx.putImageData(savedImageData, 0, 0);
+    isPainting = false; dragStart = null; savedImageData = null;
+  };
+
+  mapCanvas.addEventListener('mousedown',  e => { e.preventDefault(); onStart(e); });
+  mapCanvas.addEventListener('mousemove',  e => onMove(e));
+  mapCanvas.addEventListener('mouseup',    e => onEnd(e));
+  mapCanvas.addEventListener('mouseleave', () => onCancel());
+  mapCanvas.addEventListener('touchstart',  e => { e.preventDefault(); onStart(e); }, { passive:false });
+  mapCanvas.addEventListener('touchmove',   e => { e.preventDefault(); onMove(e); },  { passive:false });
+  mapCanvas.addEventListener('touchend',    e => onEnd(e));
 }
 
 function redrawMap() {
@@ -695,7 +748,7 @@ function redrawMap() {
     for (let c = 0; c < mapCols; c++) {
       const zid = mapGrid[r * mapCols + c] || 0;
       const z   = ZONES[zid];
-      mapCtx.fillStyle   = z.color;
+      mapCtx.fillStyle   = zoneColor(zid);
       mapCtx.fillRect(c * cp, r * cp, cp, cp);
       mapCtx.strokeStyle = z.border;
       mapCtx.lineWidth   = 0.5;
@@ -738,7 +791,7 @@ function updateMapLegend() {
     const label = info.label || z.label;
     const m2    = counts[z.id] * cellArea;
     return `<div class="map-leg-item">
-      <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
+      <span class="map-leg-dot" style="background:${zoneColor(z.id)};border:2px solid ${z.border}"></span>
       <span>${z.emoji} ${label}</span>
       <span class="map-leg-area">${m2.toLocaleString()} ม² · ${(m2/1600).toFixed(2)} ไร่</span>
     </div>`;
@@ -751,7 +804,7 @@ function updateMapLegend() {
       const plot = allPlots.find(p => p.plot_id === v.plot_id);
       if (!z || !plot) return '';
       return `<div class="map-link-item">
-        <span class="map-leg-dot" style="background:${z.color};border:2px solid ${z.border}"></span>
+        <span class="map-leg-dot" style="background:${zoneColor(parseInt(zid))};border:2px solid ${z.border}"></span>
         <span>${v.label || z.label} → <strong>${plot.plot_name}</strong></span>
         <button class="btn-goto-plot" onclick="navigateToPlot('${v.plot_id}')">ดูแปลง →</button>
       </div>`;
@@ -770,6 +823,7 @@ function openZoneEdit(zoneId) {
   editingZoneId = zoneId;
   const info = mapZoneLabels[zoneId] || {};
   document.getElementById('zf-label').value   = info.label || ZONES[zoneId]?.label || '';
+  document.getElementById('zf-color').value   = info.color || ZONES[zoneId]?.color || '#c8e6c9';
   document.getElementById('zf-plot').innerHTML =
     '<option value="">ไม่เชื่อมกับแปลง</option>' +
     allPlots.map(p => `<option value="${p.plot_id}"${info.plot_id===p.plot_id?' selected':''}>${p.plot_name}</option>`).join('');
@@ -783,11 +837,36 @@ function saveZoneEdit() {
   if (editingZoneId === null) return;
   mapZoneLabels[editingZoneId] = {
     label:   document.getElementById('zf-label').value.trim() || ZONES[editingZoneId]?.label,
+    color:   document.getElementById('zf-color').value,
     plot_id: document.getElementById('zf-plot').value || null,
   };
   closeZoneModal();
   buildZoneToolbar();
-  updateMapLegend();
+  redrawMap();
+}
+
+// Cell info popup (single click on canvas)
+function openCellInfo(cell) {
+  const zid   = mapGrid[cell.r * mapCols + cell.c] || 0;
+  const z     = ZONES[zid];
+  const info  = mapZoneLabels[zid] || {};
+  const label = info.label || z.label;
+  const col   = zoneColor(zid);
+  const plot  = info.plot_id ? allPlots.find(p => p.plot_id === info.plot_id) : null;
+  document.getElementById('ci-title').innerHTML =
+    `<span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:${col};vertical-align:middle;margin-right:6px"></span>${z.emoji} ${label}`;
+  let body = `<p style="color:#888;font-size:0.88rem;margin-bottom:10px">แถว ${cell.r + 1}  ช่อง ${cell.c + 1}</p>`;
+  if (plot)
+    body += `<p style="margin-bottom:12px">🌱 แปลง: <strong>${plot.plot_name}</strong></p>
+      <button class="btn-save" style="width:100%;margin-bottom:8px" onclick="navigateToPlot('${plot.plot_id}');closeCellInfo()">ดูรายละเอียดแปลง →</button>`;
+  if (zid > 0 && zid < 7)
+    body += `<button class="btn-apply" style="width:100%;margin-bottom:0" onclick="openZoneEdit(${zid});closeCellInfo()">✏️ แก้ไขโซน${plot ? '' : ' / เปลี่ยนสี'}</button>`;
+  document.getElementById('ci-body').innerHTML = body;
+  document.getElementById('cell-info-modal').classList.add('open');
+}
+function closeCellInfo(e) {
+  if (!e || e.target === document.getElementById('cell-info-modal'))
+    document.getElementById('cell-info-modal').classList.remove('open');
 }
 
 // Navigate to plot tab
