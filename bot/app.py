@@ -249,8 +249,17 @@ def api_add_transaction():
         image_id    = '',
         recorded_by = data.get('recorded_by', 'เว็บ'),
         date        = data.get('date'),
+        notes       = data.get('notes', ''),
     )
     return jsonify({'txn_id': txn_id})
+
+
+@app.route('/api/transactions/<txn_id>/notes', methods=['PATCH'])
+def api_update_txn_notes(txn_id):
+    from bot.sheets import update_transaction_notes
+    d = request.get_json()
+    update_transaction_notes(txn_id, d.get('notes', ''))
+    return jsonify({'ok': True})
 
 
 @app.route('/api/transactions/<txn_id>', methods=['DELETE'])

@@ -78,7 +78,6 @@ function setupTabs() {
 
       if (page === 'page-plots')    renderPlots();
       if (page === 'page-harvest')  renderHarvest();
-      if (page === 'page-season')   renderSeasonPage();
       if (page === 'page-analysis') renderAnalysis();
       if (page === 'page-calendar') renderCalendarPage();
       if (page === 'page-map')      renderMapPage();
@@ -545,10 +544,10 @@ async function renderSeasonPage() {
   }).join('');
 }
 
-function openSeasonLogModal() {
+function openSeasonLogModal(plotId) {
   document.getElementById('season-form').reset();
   document.getElementById('sl-plot').innerHTML =
-    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+    allPlots.map(p => `<option value="${p.plot_id}"${p.plot_id===plotId?' selected':''}>${p.plot_name}</option>`).join('');
   document.querySelectorAll('#sl-problem-tags input').forEach(cb => cb.checked = false);
   document.getElementById('season-modal').classList.add('open');
 }
@@ -579,7 +578,7 @@ async function submitSeasonLog(e) {
     });
     closeModal2('season-modal');
     allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()).catch(() => []);
-    renderSeasonPage();
+    renderAnalysis(anCurrentPlot);
   } catch { alert('เกิดข้อผิดพลาด ลองใหม่'); }
   finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
 }
@@ -592,65 +591,188 @@ async function deleteSeasonLog(logId) {
 }
 
 // ---------------------------------------------------------------------------
-// Page 5: Analysis
+// Page 4: Analysis + Season (merged, per-plot)
 // ---------------------------------------------------------------------------
-async function renderAnalysis() {
+let anCurrentPlot = null;
+
+async function renderAnalysis(plotId) {
   if (!Object.keys(yieldEstimates).length) {
     try { yieldEstimates = await fetch(`${API}/api/yields`).then(r => r.json()); }
     catch { yieldEstimates = {}; }
   }
+  if (!allSeasonLogs.length) {
+    try { allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()); }
+    catch { allSeasonLogs = []; }
+  }
+
+  // Build plot selector buttons
+  const btnContainer = document.getElementById('an-plot-buttons');
+  if (btnContainer && !btnContainer.querySelector('.an-plot-btn')) {
+    btnContainer.innerHTML = allPlots.map(p =>
+      `<button class="an-plot-btn plot-btn${!anCurrentPlot && allPlots[0].plot_id === p.plot_id ? ' active' : ''}"
+               data-plot-id="${p.plot_id}" onclick="selectAnPlot('${p.plot_id}')">${p.plot_name}</button>`
+    ).join('');
+  }
+
+  if (!plotId) plotId = anCurrentPlot || allPlots[0]?.plot_id;
+  if (!plotId) return;
+  anCurrentPlot = plotId;
+
+  // Mark active button
+  document.querySelectorAll('.an-plot-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.plotId === plotId);
+  });
 
   const container = document.getElementById('analysis-content');
-  container.innerHTML = '';
-
   if (!allPlots.length) {
     container.innerHTML = '<p style="color:#aaa;text-align:center;padding:32px">ยังไม่มีข้อมูลแปลง</p>';
     return;
   }
 
-  allPlots.forEach(p => {
-    const txns    = allTransactions.filter(r => r.plot_id === p.plot_id);
-    const expense = sum(txns, 'รายจ่าย');
-    const area    = parseFloat(p.area_rai) || 1;
-    const { kg: estKg, price: estPrice } = yieldData(p.plot_id);
+  const p       = allPlots.find(pl => pl.plot_id === plotId);
+  if (!p) return;
+  const txns    = allTransactions.filter(r => r.plot_id === plotId);
+  const expense = sum(txns, 'รายจ่าย');
+  const income  = sum(txns, 'รายรับ');
+  const area    = parseFloat(p.area_rai) || 1;
+  const { kg: estKg, price: estPrice } = yieldData(plotId);
 
-    const box = document.createElement('div');
-    box.className = 'analysis-box';
-    box.id = `abox-${p.plot_id}`;
-    box.innerHTML = `
-      <h3>📐 ${p.plot_name} · ${p.crop_type} · ${area} ไร่</h3>
-      <div class="an-row"><span>💸 ต้นทุนรวม</span><strong>${fmt(expense)} บาท</strong></div>
-      <div class="an-row"><span>🌾 ต้นทุนต่อไร่</span><strong>${fmt(expense / area)} บาท/ไร่</strong></div>
+  // Cost breakdown by category
+  const catMap = {};
+  txns.filter(r => r.type === 'รายจ่าย').forEach(r => {
+    catMap[r.category] = (catMap[r.category] || 0) + parseFloat(r.amount || 0);
+  });
+  const catBars = Object.entries(catMap).sort((a,b) => b[1]-a[1]).map(([cat, val]) => {
+    const pct = expense > 0 ? Math.round(val/expense*100) : 0;
+    return `<div class="an-cat-row">
+      <span class="an-cat-name">${cat}</span>
+      <div class="an-cat-bar-wrap"><div class="an-cat-bar" style="width:${pct}%"></div></div>
+      <span class="an-cat-val">${fmt(val)} ฿ (${pct}%)</span>
+    </div>`;
+  }).join('') || '<p style="color:#aaa;font-size:0.85rem">ยังไม่มีรายจ่าย</p>';
+
+  // Season logs for this plot
+  const logs = allSeasonLogs.filter(l => l.plot_id === plotId);
+  const logCards = logs.length
+    ? logs.map(l => {
+        const rev = parseFloat(l.yield_kg||0) * parseFloat(l.price_per_kg||0);
+        const problems = l.problems ? l.problems.split(',').filter(Boolean)
+          .map(pr => `<span class="prob-tag">${pr.trim()}</span>`).join('') : '—';
+        return `<div class="sl-card">
+          <div class="sl-card-head">
+            <strong>${l.season_name}</strong>
+            <span style="color:#888;font-size:0.8rem">${l.start_date}${l.end_date ? ' → '+l.end_date : ' → ปัจจุบัน'}</span>
+            <button class="btn-del" onclick="deleteSeasonLog('${l.log_id}')">ลบ</button>
+          </div>
+          <div class="sl-grid">
+            <div class="sl-stat"><div class="sl-stat-l">🌾 ผลผลิต</div><strong>${fmt(l.yield_kg||0)} กก.</strong></div>
+            <div class="sl-stat"><div class="sl-stat-l">💰 รายได้</div><strong class="amt-inc">${fmt(rev)} ฿</strong></div>
+            <div class="sl-stat"><div class="sl-stat-l">💊 ต้นทุนปุ๋ย</div><strong>${fmt(l.fertilizer_cost||0)} ฿</strong></div>
+            <div class="sl-stat"><div class="sl-stat-l">🧪 ต้นทุนยา</div><strong>${fmt(l.pesticide_cost||0)} ฿</strong></div>
+            <div class="sl-stat"><div class="sl-stat-l">💧 รดน้ำ</div><strong>${l.water_count||0} ครั้ง</strong></div>
+            <div class="sl-stat"><div class="sl-stat-l">🌧️ ฝนตก</div><strong>${l.rain_count||0} ครั้ง</strong></div>
+          </div>
+          <div style="margin-top:8px"><span style="font-size:0.8rem;color:#888">ปัญหา: </span>${problems}</div>
+          ${l.notes ? `<div class="sl-notes">"${l.notes}"</div>` : ''}
+        </div>`;
+      }).join('')
+    : `<p style="color:#aaa;font-size:0.85rem;padding:8px 0">ยังไม่มีบันทึก — กด "➕ เพิ่มบันทึกฤดูกาล" เพื่อเริ่ม</p>`;
+
+  // All transactions for this plot (with notes)
+  const txnRows = [...txns].reverse().map(r => {
+    const isInc = r.type === 'รายรับ';
+    const notes = r.notes || '';
+    return `<tr class="${isInc ? 'row-income' : 'row-expense'}">
+      <td>${(r.date||'').slice(0,10)}</td>
+      <td><span class="type-badge ${isInc?'inc':'exp'}">${isInc?'+ รับ':'− จ่าย'}</span></td>
+      <td>${r.category}</td>
+      <td class="amt-cell ${isInc?'amt-inc':'amt-exp'}">${isInc?'+':'−'}${fmt(r.amount)} ฿</td>
+      <td class="notes-cell">
+        ${notes ? `<span class="txn-notes">${notes}</span>` : '<span style="color:#ccc">—</span>'}
+        <button class="btn-edit-notes" title="แก้ไขเหตุผล"
+          onclick="openNotesModal('${r.id}','${r.category}','${(r.date||'').slice(0,10)}','${notes.replace(/'/g,"\\'")}')">✏️</button>
+      </td>
+      <td><button class="btn-del" onclick="deleteTxnFromAnalysis('${r.id}')">ลบ</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">ยังไม่มีรายการ</td></tr>';
+
+  container.innerHTML = `
+    <div class="an-plot-header">
+      <span class="an-plot-title">🌿 ${p.plot_name} · ${p.crop_type} · ${area} ไร่</span>
+      <span class="an-plot-status ${p.status==='เก็บเกี่ยวแล้ว'?'done':'active'}">${p.status||'กำลังปลูก'}</span>
+    </div>
+
+    <!-- Section 1: Cost summary -->
+    <div class="an-section">
+      <div class="an-section-title">💸 ต้นทุนฤดูกาลปัจจุบัน</div>
+      <div class="cards" style="margin-bottom:12px">
+        <div class="card expense"><div class="label">ต้นทุนรวม</div><div class="value">${fmt(expense)} ฿</div></div>
+        <div class="card"><div class="label">ต้นทุน/ไร่</div><div class="value" style="font-size:1rem">${fmt(expense/area)} ฿</div></div>
+        <div class="card income"><div class="label">รายรับรวม</div><div class="value">${fmt(income)} ฿</div></div>
+      </div>
+      <div class="an-section-sub">แยกตามหมวด</div>
+      ${catBars}
+    </div>
+
+    <!-- Section 2: Yield estimate -->
+    <div class="an-section">
+      <div class="an-section-title">🌾 ประมาณการผลผลิต & กำไร</div>
       <div class="an-input-row">
-        <label>📦 ประมาณการผลผลิต</label>
+        <label>📦 ผลผลิตที่ประเมิน</label>
         <input class="yield-input" type="number" min="0" placeholder="กรอก กก."
-               data-plot="${p.plot_id}" data-expense="${expense}"
-               value="${estKg || ''}"
-               oninput="recalcPlot(this)">
+               data-plot="${plotId}" data-expense="${expense}"
+               value="${estKg||''}" oninput="recalcPlot(this)">
         <span>กก.</span>
       </div>
       <div class="an-input-row">
         <label>💰 ราคาขายที่คาดไว้</label>
         <input class="price-input" type="number" min="0" placeholder="บาท/กก."
-               data-plot="${p.plot_id}" data-expense="${expense}" data-est="${estKg}"
-               value="${estPrice || ''}"
-               oninput="recalcProfit(this)">
+               data-plot="${plotId}" data-expense="${expense}" data-est="${estKg}"
+               value="${estPrice||''}" oninput="recalcProfit(this)">
         <span>บาท/กก.</span>
       </div>
-      <div id="acalc-${p.plot_id}">
-        ${(estKg && estPrice) ? _calcHtml(expense, estKg, estPrice, p.plot_id) : '<p class="an-hint">← กรอกผลผลิต + ราคาเพื่อคำนวณ</p>'}
+      <div id="acalc-${plotId}">
+        ${(estKg&&estPrice) ? _calcHtml(expense,estKg,estPrice,plotId) : '<p class="an-hint">← กรอกผลผลิต + ราคาเพื่อดูกำไร</p>'}
       </div>
-    `;
-    container.appendChild(box);
-  });
+      <button class="btn-save" style="width:100%;margin-top:12px;padding:12px" onclick="saveYieldEstimates()">💾 บันทึกการประเมิน</button>
+    </div>
 
-  const btn = document.createElement('button');
-  btn.className = 'btn-save';
-  btn.id        = 'yield-save-btn';
-  btn.style     = 'width:100%;margin-top:8px;padding:14px';
-  btn.textContent = '💾 บันทึกการประเมิน';
-  btn.onclick   = saveYieldEstimates;
-  container.appendChild(btn);
+    <!-- Section 3: Transaction detail with notes -->
+    <div class="an-section">
+      <div class="an-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>📝 รายละเอียดรายรับ-รายจ่าย</span>
+        <button class="btn-add-inline" onclick="openModal('${plotId}')">➕ เพิ่มรายการ</button>
+      </div>
+      <div class="table-wrap" style="margin-top:10px">
+        <table>
+          <thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวด</th><th>ยอด</th><th>เหตุผล / บันทึก</th><th></th></tr></thead>
+          <tbody>${txnRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Section 4: Season log -->
+    <div class="an-section">
+      <div class="an-section-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>📓 บันทึกฤดูกาล</span>
+        <button class="btn-add-inline" onclick="openSeasonLogModal('${plotId}')">➕ เพิ่มบันทึก</button>
+      </div>
+      ${logCards}
+    </div>
+  `;
+}
+
+function selectAnPlot(plotId) {
+  anCurrentPlot = plotId;
+  renderAnalysis(plotId);
+}
+
+async function deleteTxnFromAnalysis(txnId) {
+  if (!confirm('ลบรายการนี้?')) return;
+  await fetch(`${API}/api/transactions/${txnId}`, { method: 'DELETE' });
+  await loadAll();
+  renderOverview();
+  renderAnalysis(anCurrentPlot);
 }
 
 function _calcHtml(expense, estKg, estPrice, plotId) {
@@ -953,6 +1075,7 @@ async function submitTxn(e) {
     amount:      document.getElementById('f-amount').value,
     plot_id:     document.getElementById('f-plot').value,
     date:        document.getElementById('f-date').value,
+    notes:       document.getElementById('f-notes').value || '',
     recorded_by: document.getElementById('f-by').value || 'เว็บ',
   };
   try {
@@ -1034,6 +1157,7 @@ function renderTxnTable(tbodyId, txns) {
   tbody.innerHTML = '';
   txns.forEach(r => {
     const isInc = r.type === 'รายรับ';
+    const notes = r.notes || '';
     const tr = document.createElement('tr');
     tr.className = isInc ? 'row-income' : 'row-expense';
     tr.innerHTML = `
@@ -1041,11 +1165,46 @@ function renderTxnTable(tbodyId, txns) {
       <td><span class="type-badge ${isInc ? 'inc' : 'exp'}">${isInc ? '+ รับ' : '− จ่าย'}</span></td>
       <td>${r.category}</td>
       <td class="amt-cell ${isInc ? 'amt-inc' : 'amt-exp'}">${isInc ? '+' : '−'}${fmt(r.amount)} ฿</td>
-      <td>${r.recorded_by || ''}</td>
+      <td class="notes-cell">
+        ${notes ? `<span class="txn-notes">${notes}</span>` : '<span style="color:#ccc">—</span>'}
+        <button class="btn-edit-notes" title="แก้ไขเหตุผล"
+          onclick="openNotesModal('${r.id}','${r.category}','${(r.date||'').slice(0,10)}','${notes.replace(/'/g,"\\'")}')">✏️</button>
+      </td>
       <td><button class="btn-del" onclick="deleteTxn('${r.id}')">ลบ</button></td>
     `;
     tbody.appendChild(tr);
   });
   if (!txns.length)
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรายการ</td></tr>';
+}
+
+function openNotesModal(txnId, category, date, currentNotes) {
+  document.getElementById('nm-txn-id').value = txnId;
+  document.getElementById('nm-notes').value  = currentNotes || '';
+  document.getElementById('nm-info').textContent = `${date} · ${category}`;
+  document.getElementById('notes-modal').classList.add('open');
+  setTimeout(() => document.getElementById('nm-notes').focus(), 100);
+}
+
+async function submitTxnNotes() {
+  const btn   = document.getElementById('nm-save-btn');
+  const txnId = document.getElementById('nm-txn-id').value;
+  const notes = document.getElementById('nm-notes').value;
+  btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
+  try {
+    await fetch(`${API}/api/transactions/${txnId}/notes`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ notes }),
+    });
+    // update local state
+    const r = allTransactions.find(t => t.id === txnId);
+    if (r) r.notes = notes;
+    closeModal2('notes-modal');
+    // refresh whichever table is visible
+    const activePlot = document.querySelector('.plot-btn.active');
+    if (activePlot) renderPlotDetail(activePlot.dataset.plotId);
+    const anPlot = document.querySelector('.an-plot-btn.active');
+    if (anPlot) renderAnalysis(anPlot.dataset.plotId);
+  } catch { alert('เกิดข้อผิดพลาด'); }
+  finally  { btn.disabled = false; btn.textContent = 'บันทึก'; }
 }

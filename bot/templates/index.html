@@ -22,8 +22,7 @@
   <button class="tab-btn active" data-page="page-overview">📊 ภาพรวม</button>
   <button class="tab-btn"        data-page="page-plots">🌱 รายแปลง</button>
   <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
-  <button class="tab-btn"        data-page="page-season">📓 ฤดูกาล</button>
-  <button class="tab-btn"        data-page="page-analysis">📐 วิเคราะห์</button>
+  <button class="tab-btn"        data-page="page-analysis">📈 วิเคราะห์</button>
   <button class="tab-btn"        data-page="page-calendar">📅 ปฏิทิน</button>
 </nav>
 
@@ -205,20 +204,11 @@
     </div>
   </section>
 
-  <!-- Page 4: Season Log -->
-  <section id="page-season" class="page">
-    <div class="page-action-bar">
-      <span class="page-action-title">📓 บันทึกฤดูกาล</span>
-      <button class="btn-add-inline" onclick="openSeasonLogModal()">➕ เพิ่มบันทึก</button>
-    </div>
-    <p style="color:#888;font-size:0.85rem;margin-bottom:16px">
-      บันทึกข้อมูลสำคัญต่อแปลงต่อฤดู เพื่อวิเคราะห์และเปรียบเทียบในอนาคต
-    </p>
-    <div id="season-content"><div class="loading">กำลังโหลด...</div></div>
-  </section>
-
-  <!-- Page 4: Analysis -->
+  <!-- Page 4: Analysis + Season (merged) -->
   <section id="page-analysis" class="page">
+    <div class="plot-toolbar" style="margin-bottom:12px">
+      <div id="an-plot-buttons" class="plot-select"></div>
+    </div>
     <div id="analysis-content">
       <div class="loading">กำลังโหลด...</div>
     </div>
@@ -273,6 +263,10 @@
       <div class="form-row">
         <label>แปลง</label>
         <select id="f-plot" required></select>
+      </div>
+      <div class="form-row">
+        <label>เหตุผล / บันทึก (ไม่บังคับ)</label>
+        <input id="f-notes" type="text" placeholder="เช่น ใส่ปุ๋ยรองพื้น สูตร 46-0-0, ฉีดยาแมลง">
       </div>
       <div class="form-row">
         <label>บันทึกโดย</label>
@@ -518,6 +512,23 @@
         <button type="submit" class="btn-save" id="sl-save-btn">บันทึก</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Modal: แก้ไขเหตุผลรายการ -->
+<div id="notes-modal" class="modal-overlay" onclick="closeModal2('notes-modal',event)">
+  <div class="modal" style="max-width:420px">
+    <h2>✏️ แก้ไขเหตุผล / บันทึก</h2>
+    <input type="hidden" id="nm-txn-id">
+    <div class="nm-info" id="nm-info" style="background:#f5f5f5;border-radius:8px;padding:10px;margin-bottom:14px;font-size:0.9rem;color:#555"></div>
+    <div class="form-row">
+      <label>เหตุผล / บันทึก</label>
+      <input id="nm-notes" type="text" placeholder="เช่น ใส่ปุ๋ยสูตร 46-0-0 รองพื้น ครั้งที่ 1">
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn-cancel" onclick="closeModal2('notes-modal')">ยกเลิก</button>
+      <button type="button" class="btn-save" id="nm-save-btn" onclick="submitTxnNotes()">บันทึก</button>
+    </div>
   </div>
 </div>
 

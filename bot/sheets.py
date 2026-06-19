@@ -44,6 +44,14 @@ def _next_id(prefix: str, ws: gspread.Worksheet) -> str:
 # Transactions
 # ---------------------------------------------------------------------------
 
+def _ensure_txn_notes_col():
+    """Add 'notes' header to transactions sheet if not present."""
+    ws = _sheet('transactions')
+    headers = ws.row_values(1)
+    if 'notes' not in headers:
+        ws.update_cell(1, len(headers) + 1, 'notes')
+
+
 def save_transaction(
     txn_type: str,
     category: str,
@@ -52,16 +60,30 @@ def save_transaction(
     image_id: str,
     recorded_by: str,
     date: str | None = None,
+    notes: str = '',
 ) -> str:
     ws     = _sheet('transactions')
     txn_id = _next_id('TXN', ws)
     now    = (date + ' 00:00') if date else datetime.now().strftime('%Y-%m-%d %H:%M')
     ws.append_row([
         txn_id, now, txn_type, category, amount,
-        plot_id, '', recorded_by,
+        plot_id, '', recorded_by, notes,
     ])
     logger.info(f'บันทึก {txn_id}: {txn_type} {amount} บาท แปลง {plot_id}')
     return txn_id
+
+
+def update_transaction_notes(txn_id: str, notes: str):
+    ws   = _sheet('transactions')
+    headers = ws.row_values(1)
+    if 'notes' not in headers:
+        ws.update_cell(1, len(headers) + 1, 'notes')
+        notes_col = len(headers) + 1
+    else:
+        notes_col = headers.index('notes') + 1
+    cell = ws.find(txn_id, in_column=1)
+    if cell:
+        ws.update_cell(cell.row, notes_col, notes)
 
 
 def delete_transaction(txn_id: str):
