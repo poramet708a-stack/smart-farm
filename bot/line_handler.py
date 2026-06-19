@@ -183,9 +183,19 @@ def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: 
     result = parse_command(text)
     if result:
         _reply(api, token, result)
-    else:
+        return
+
+    # พิมพ์ตัวเลขหรือ "จ่าย/รับ ตัวเลข" เพื่อเริ่ม flow
+    amount = _parse_amount_from_text(text)
+    if amount:
+        user_states[user_id] = {'step': 'waiting_type', 'amount': amount, 'image_id': ''}
         _reply(api, token,
-               "ส่งรูปใบเสร็จเพื่อบันทึกรายการ\nหรือพิมพ์ 'สรุป' เพื่อดูยอดเดือนนี้ครับ")
+               f"รับทราบ {amount:,.0f} บาทครับ\nรายการนี้คืออะไรครับ?",
+               _qr('💸 รายจ่าย', '💰 รายรับ'))
+        return
+
+    _reply(api, token,
+           "ส่งรูปใบเสร็จ หรือพิมพ์จำนวนเงิน เช่น 500\nหรือพิมพ์ 'สรุป' เพื่อดูยอดครับ")
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +227,16 @@ def handle_postback(event, api: MessagingApi):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _parse_amount_from_text(text: str) -> float | None:
+    import re
+    cleaned = re.sub(r'[จ่ายรับโอนซื้อขาย\s]', '', text).replace(',', '')
+    try:
+        val = float(cleaned)
+        return val if 1 <= val <= 9_999_999 else None
+    except ValueError:
+        return None
+
 
 def _get_display_name(api: MessagingApi, user_id: str) -> str:
     try:
