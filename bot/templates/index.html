@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farm Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="header">
+  <span style="font-size:2rem">🌾</span>
+  <div>
+    <h1>Farm Manager</h1>
+    <div class="sub">ระบบจัดการรายรับ-รายจ่ายแปลงเกษตร</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-page="page-overview">📊 ภาพรวม</button>
+  <button class="tab-btn"        data-page="page-plots">🌱 รายแปลง</button>
+  <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
+  <button class="tab-btn"        data-page="page-analysis">📐 วิเคราะห์</button>
+</nav>
+
+<main class="content">
+
+  <!-- Page 1: Overview -->
+  <section id="page-overview" class="page active">
+    <div class="cards">
+      <div class="card income">
+        <div class="label">💰 รายรับเดือนนี้</div>
+        <div class="value" id="ov-income">—</div>
+      </div>
+      <div class="card expense">
+        <div class="label">💸 รายจ่ายเดือนนี้</div>
+        <div class="value" id="ov-expense">—</div>
+      </div>
+      <div class="card profit">
+        <div class="label">✅ กำไรเดือนนี้</div>
+        <div class="value" id="ov-profit">—</div>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <h3>รายรับ vs รายจ่าย (6 เดือนล่าสุด)</h3>
+      <canvas id="chart-monthly"></canvas>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">🌾 แปลงที่ใช้เงินมากสุด</div>
+        <div class="value" style="font-size:1rem" id="ov-top-plot">—</div>
+      </div>
+      <div class="card">
+        <div class="label">⏳ รออนุมัติ</div>
+        <div class="value" id="ov-pending">—</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Page 2: Per Plot -->
+  <section id="page-plots" class="page">
+    <div id="plot-buttons" class="plot-select"></div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">🌱 พืช</div>
+        <div class="value" style="font-size:1rem" id="plot-crop">—</div>
+      </div>
+      <div class="card">
+        <div class="label">📐 พื้นที่</div>
+        <div class="value" style="font-size:1rem" id="plot-area">—</div>
+      </div>
+      <div class="card">
+        <div class="label">📅 วันปลูก</div>
+        <div class="value" style="font-size:1rem" id="plot-start">—</div>
+      </div>
+      <div class="card">
+        <div class="label">🚜 เก็บเกี่ยว</div>
+        <div class="value" style="font-size:1rem" id="plot-harvest-date">—</div>
+      </div>
+    </div>
+
+    <div class="cards">
+      <div class="card expense">
+        <div class="label">💸 ต้นทุนรวม</div>
+        <div class="value" id="plot-cost">—</div>
+      </div>
+      <div class="card">
+        <div class="label">💸/ไร่</div>
+        <div class="value" id="plot-cost-rai">—</div>
+      </div>
+      <div class="card income">
+        <div class="label">💰 รายรับรวม</div>
+        <div class="value" id="plot-income">—</div>
+      </div>
+      <div class="card profit">
+        <div class="label">✅ กำไร</div>
+        <div class="value" id="plot-profit">—</div>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <h3>ต้นทุนแยกหมวด</h3>
+      <canvas id="chart-category"></canvas>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>วันที่</th><th>ประเภท</th><th>หมวด</th>
+            <th>ยอด (บาท)</th><th>บันทึกโดย</th><th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody id="plot-txn-table"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Page 3: Harvest -->
+  <section id="page-harvest" class="page">
+    <div class="table-wrap">
+      <table id="harvest-table">
+        <thead>
+          <tr>
+            <th>แปลง</th><th>วันเก็บ</th><th>ผลผลิต</th>
+            <th>ราคา/กก.</th><th>รายได้</th><th>ต้นทุน</th><th>กำไร</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Page 4: Analysis -->
+  <section id="page-analysis" class="page">
+    <div id="analysis-content">
+      <div class="loading">กำลังโหลด...</div>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
