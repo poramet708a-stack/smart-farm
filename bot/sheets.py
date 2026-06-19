@@ -18,9 +18,15 @@ _gc: gspread.Client | None = None
 def _client() -> gspread.Client:
     global _gc
     if _gc is None:
-        creds = Credentials.from_service_account_file(
-            os.environ['GOOGLE_CREDENTIALS_JSON'], scopes=SCOPES
-        )
+        json_content = os.environ.get('GOOGLE_CREDENTIALS_JSON_CONTENT')
+        if json_content:
+            import json
+            info = json.loads(json_content)
+            creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        else:
+            creds = Credentials.from_service_account_file(
+                os.environ['GOOGLE_CREDENTIALS_JSON'], scopes=SCOPES
+            )
         _gc = gspread.authorize(creds)
     return _gc
 
