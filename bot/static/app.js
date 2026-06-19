@@ -38,22 +38,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadAll() {
-  const [plots, txns, harvest, acts, yields, sessions, entries] = await Promise.all([
+  const [plots, txns, harvest, acts, yields] = await Promise.all([
     fetch(`${API}/api/plots`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/transactions`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/harvest`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/activities`).then(r => r.json()).catch(() => []),
     fetch(`${API}/api/yields`).then(r => r.json()).catch(() => ({})),
-    fetch(`${API}/api/harvest-sessions`).then(r => r.json()).catch(() => []),
-    fetch(`${API}/api/harvest-entries`).then(r => r.json()).catch(() => []),
   ]);
-  allPlots           = plots;
-  allTransactions    = txns;
-  allHarvest         = harvest;
-  allActivities      = acts;
-  yieldEstimates     = yields;
-  allHarvestSessions = sessions;
-  allHarvestEntries  = entries;
+  allPlots        = plots;
+  allTransactions = txns;
+  allHarvest      = harvest;
+  allActivities   = acts;
+  yieldEstimates  = yields;
 }
 
 // helper: normalize yieldEstimates entry → { kg, price }
@@ -297,7 +293,13 @@ function renderPlotDetail(plotId) {
 // ---------------------------------------------------------------------------
 // Page 3: Harvest (Session-based)
 // ---------------------------------------------------------------------------
-function renderHarvest() {
+async function renderHarvest() {
+  if (!allHarvestSessions.length && !allHarvestEntries.length) {
+    [allHarvestSessions, allHarvestEntries] = await Promise.all([
+      fetch(`${API}/api/harvest-sessions`).then(r => r.json()).catch(() => []),
+      fetch(`${API}/api/harvest-entries`).then(r => r.json()).catch(() => []),
+    ]);
+  }
   const done    = allHarvestSessions.filter(s => s.status === 'เสร็จแล้ว');
   const open    = allHarvestSessions.filter(s => s.status === 'กำลังเก็บ');
   const totalRev = done.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
@@ -474,11 +476,9 @@ async function submitCloseSession(e) {
 }
 
 async function reloadHarvest() {
-  [allHarvestSessions, allHarvestEntries] = await Promise.all([
-    fetch(`${API}/api/harvest-sessions`).then(r => r.json()).catch(() => []),
-    fetch(`${API}/api/harvest-entries`).then(r => r.json()).catch(() => []),
-  ]);
-  renderHarvest();
+  allHarvestSessions = [];
+  allHarvestEntries  = [];
+  await renderHarvest();
   renderOverview();
 }
 
@@ -587,7 +587,7 @@ async function deleteSeasonLog(logId) {
   if (!confirm('ลบบันทึกฤดูกาลนี้?')) return;
   await fetch(`${API}/api/season-logs/${logId}`, { method: 'DELETE' });
   allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()).catch(() => []);
-  renderSeasonPage();
+  renderAnalysis(anCurrentPlot);
 }
 
 // ---------------------------------------------------------------------------

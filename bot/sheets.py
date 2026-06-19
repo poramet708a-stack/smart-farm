@@ -13,6 +13,8 @@ SCOPES = [
 ]
 
 _gc: gspread.Client | None = None
+_ss = None          # cached Spreadsheet object
+_ws: dict = {}      # cached Worksheet objects  { name: Worksheet }
 
 
 def _client() -> gspread.Client:
@@ -31,8 +33,17 @@ def _client() -> gspread.Client:
     return _gc
 
 
+def _spreadsheet():
+    global _ss
+    if _ss is None:
+        _ss = _client().open_by_key(os.environ['GOOGLE_SHEETS_ID'])
+    return _ss
+
+
 def _sheet(name: str) -> gspread.Worksheet:
-    return _client().open_by_key(os.environ['GOOGLE_SHEETS_ID']).worksheet(name)
+    if name not in _ws:
+        _ws[name] = _spreadsheet().worksheet(name)
+    return _ws[name]
 
 
 def _next_id(prefix: str, ws: gspread.Worksheet) -> str:
@@ -191,13 +202,16 @@ def delete_plot(plot_id: str):
 # ---------------------------------------------------------------------------
 
 def _ensure_sheet(name: str, headers: list) -> gspread.Worksheet:
-    ss = _client().open_by_key(os.environ['GOOGLE_SHEETS_ID'])
+    if name in _ws:
+        return _ws[name]
+    ss = _spreadsheet()
     try:
-        return ss.worksheet(name)
+        ws = ss.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         ws = ss.add_worksheet(title=name, rows=1000, cols=len(headers))
         ws.append_row(headers)
-        return ws
+    _ws[name] = ws
+    return ws
 
 
 # ---------------------------------------------------------------------------
