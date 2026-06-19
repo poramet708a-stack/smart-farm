@@ -380,6 +380,76 @@ tr:hover td { background: #fafafa; }
 }
 .btn-save:disabled { background: #aaa; cursor: default; }
 
+/* ===== Overview extras ===== */
+.ov-section { margin-top: 20px; }
+.ov-section-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #444;
+  margin-bottom: 10px;
+}
+.ov-empty { color: #aaa; text-align: center; padding: 12px; font-size: 0.9rem; }
+
+/* Plot expense bars */
+.ov-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+}
+.ov-bar-label { width: 90px; flex-shrink: 0; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-bar-wrap  { flex: 1; background: #f0f0f0; border-radius: 6px; height: 14px; overflow: hidden; }
+.ov-bar-fill  { height: 100%; background: linear-gradient(90deg, #ef5350, #ff7043); border-radius: 6px; transition: width .4s; }
+.ov-bar-amt   { width: 80px; text-align: right; flex-shrink: 0; color: #333; font-weight: 600; }
+
+/* Plot status cards */
+.ov-plot-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.ov-plot-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.ov-pc-top  { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ov-pc-name { font-weight: 700; font-size: 0.95rem; }
+.ov-pc-crop { font-size: 0.82rem; color: #666; margin-bottom: 8px; }
+.ov-pc-row  { display: flex; justify-content: space-between; font-size: 0.85rem; color: #555; margin-top: 4px; }
+.ov-pc-row strong { color: #222; }
+.ov-days-soon { color: #e65100 !important; }
+
+.ov-badge {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.ov-badge.active { background: #e8f5e9; color: #2e7d32; }
+.ov-badge.done   { background: #eeeeee; color: #616161; }
+
+/* Recent transactions */
+.ov-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.ov-recent-row:last-child { border-bottom: none; }
+.ov-recent-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ov-recent-dot.inc { background: #66bb6a; }
+.ov-recent-dot.exp { background: #ef5350; }
+.ov-recent-info { flex: 1; min-width: 0; }
+.ov-recent-cat  { font-size: 0.9rem; font-weight: 600; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-recent-meta { font-size: 0.77rem; color: #999; margin-top: 1px; }
+.ov-recent-amt  { font-size: 0.92rem; font-weight: 700; white-space: nowrap; }
+.ov-recent-amt.inc { color: #2e7d32; }
+.ov-recent-amt.exp { color: #c62828; }
+
 @media (max-width: 480px) {
   .header h1 { font-size: 1.1rem; }
   .tab-btn   { padding: 12px 12px; font-size: 0.82rem; }

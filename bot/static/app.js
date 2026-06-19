@@ -89,6 +89,76 @@ function renderOverview() {
     const name = allPlots.find(p => p.plot_id === topPlot[0])?.plot_name || topPlot[0];
     setText('ov-top-plot', `${name} (${fmt(topPlot[1])} บาท)`);
   }
+
+  renderOvPlotBars(plotExpense);
+  renderOvPlotCards();
+  renderOvRecent();
+}
+
+function renderOvPlotBars(plotExpense) {
+  const el = document.getElementById('ov-plot-bars');
+  if (!el) return;
+  if (!allPlots.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
+  const entries = allPlots.map(p => ({
+    name: p.plot_name,
+    val:  plotExpense[p.plot_id] || 0,
+  })).sort((a, b) => b.val - a.val);
+  const max = entries[0]?.val || 1;
+  el.innerHTML = entries.map(e => `
+    <div class="ov-bar-row">
+      <div class="ov-bar-label">${e.name}</div>
+      <div class="ov-bar-wrap">
+        <div class="ov-bar-fill" style="width:${e.val ? Math.max(4, Math.round(e.val / max * 100)) : 0}%"></div>
+      </div>
+      <div class="ov-bar-amt">${e.val ? fmt(e.val) + ' ฿' : '—'}</div>
+    </div>`).join('');
+}
+
+function renderOvPlotCards() {
+  const el = document.getElementById('ov-plot-cards');
+  if (!el) return;
+  if (!allPlots.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีแปลง</p>'; return; }
+  const today = new Date();
+  el.innerHTML = allPlots.map(p => {
+    const spent   = sum(allTransactions.filter(r => r.plot_id === p.plot_id && r.type === 'รายจ่าย'));
+    const harvest = p.expected_harvest ? new Date(p.expected_harvest) : null;
+    const days    = harvest ? Math.ceil((harvest - today) / 86400000) : null;
+    const daysStr = days === null ? '—'
+                  : days < 0    ? `เลยกำหนด ${Math.abs(days)} วัน`
+                  : days === 0  ? 'วันนี้!'
+                  :               `อีก ${days} วัน`;
+    const daysClass = days !== null && days <= 7 ? 'ov-days-soon' : '';
+    const statusBadge = p.status === 'เก็บเกี่ยวแล้ว'
+      ? '<span class="ov-badge done">✅ เก็บเกี่ยวแล้ว</span>'
+      : '<span class="ov-badge active">🌱 กำลังปลูก</span>';
+    return `<div class="ov-plot-card">
+      <div class="ov-pc-top">${statusBadge}<span class="ov-pc-name">${p.plot_name}</span></div>
+      <div class="ov-pc-crop">🌿 ${p.crop_type || '—'} · ${p.area_rai || '—'} ไร่</div>
+      <div class="ov-pc-row"><span>💸 ค่าใช้จ่ายสะสม</span><strong>${fmt(spent)} ฿</strong></div>
+      <div class="ov-pc-row"><span>🚜 เก็บเกี่ยว</span><strong class="${daysClass}">${daysStr}</strong></div>
+    </div>`;
+  }).join('');
+}
+
+function renderOvRecent() {
+  const el = document.getElementById('ov-recent');
+  if (!el) return;
+  const recent = [...allTransactions]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 8);
+  if (!recent.length) { el.innerHTML = '<p class="ov-empty">ยังไม่มีรายการ</p>'; return; }
+  el.innerHTML = recent.map(r => {
+    const plotName = allPlots.find(p => p.plot_id === r.plot_id)?.plot_name || r.plot_id || '—';
+    const isIncome = r.type === 'รายรับ';
+    return `<div class="ov-recent-row">
+      <span class="ov-recent-dot ${isIncome ? 'inc' : 'exp'}"></span>
+      <div class="ov-recent-info">
+        <div class="ov-recent-cat">${r.category || r.type}</div>
+        <div class="ov-recent-meta">${(r.date || '').slice(0, 10)} · ${plotName}</div>
+      </div>
+      <div class="ov-recent-amt ${isIncome ? 'inc' : 'exp'}">${isIncome ? '+' : '-'}${fmt(r.amount)} ฿</div>
+    </div>`;
+  }).join('');
 }
 
 function renderMonthlyChart(txns) {
