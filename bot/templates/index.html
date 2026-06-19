@@ -25,7 +25,6 @@
   <button class="tab-btn"        data-page="page-harvest">🚜 เก็บเกี่ยว</button>
   <button class="tab-btn"        data-page="page-analysis">📐 วิเคราะห์</button>
   <button class="tab-btn"        data-page="page-calendar">📅 ปฏิทิน</button>
-  <button class="tab-btn"        data-page="page-map">🗺️ แผนผัง</button>
 </nav>
 
 <main class="content">
@@ -185,44 +184,6 @@
     <div class="cal-grid" id="cal-grid"></div>
   </section>
 
-  <!-- Page 6: Farm Map -->
-  <section id="page-map" class="page">
-
-    <div class="zone-toolbar" id="zone-toolbar"></div>
-
-    <div class="map-controls">
-      <label class="map-ctrl-label">กว้าง:</label>
-      <input type="number" id="map-width-m"  value="200" min="10" max="5000" class="map-dim-input"> ม.
-      <label class="map-ctrl-label">ยาว:</label>
-      <input type="number" id="map-height-m" value="150" min="10" max="5000" class="map-dim-input"> ม.
-      <label class="map-ctrl-label">ช่องละ:</label>
-      <select id="map-cell-m" onchange="onCellMChange()">
-        <option value="5">5 ม.</option>
-        <option value="10" selected>10 ม.</option>
-        <option value="20">20 ม.</option>
-        <option value="50">50 ม.</option>
-      </select>
-      <button class="btn-apply" onclick="applyGridSize()">ตั้งค่า</button>
-    </div>
-    <div class="map-controls" style="gap:6px">
-      <button class="zoom-btn" onclick="zoomOut()">🔍−</button>
-      <span id="zoom-label" class="zoom-label">100%</span>
-      <button class="zoom-btn" onclick="zoomIn()">🔍+</button>
-      <div style="flex:1"></div>
-      <button class="btn-save"   id="map-save-btn" onclick="saveMap()" style="flex:0;padding:8px 18px">💾 บันทึก</button>
-      <button class="btn-cancel" onclick="clearMap()" style="flex:0;padding:8px 14px">🗑️ ล้าง</button>
-    </div>
-
-    <div id="map-canvas-wrap" class="map-canvas-wrap">
-      <canvas id="map-canvas"></canvas>
-    </div>
-
-    <div id="map-legend" class="map-legend">
-      <p style="color:#aaa;text-align:center;padding:12px">วาดแผนผังด้านบนเพื่อดูสรุปพื้นที่</p>
-    </div>
-
-  </section>
-
 </main>
 
 <!-- Modal: เพิ่มรายการ -->
@@ -320,45 +281,6 @@
         <button type="submit" class="btn-save" id="plot-save-btn">บันทึก</button>
       </div>
     </form>
-  </div>
-</div>
-
-<!-- Modal: แก้ไขโซน -->
-<div id="zone-modal" class="modal-overlay" onclick="closeZoneModal(event)">
-  <div class="modal">
-    <h2>✏️ แก้ไขโซน</h2>
-    <div class="form-row">
-      <label>ชื่อโซน</label>
-      <input id="zf-label" type="text" placeholder="เช่น แปลงข้าว A">
-    </div>
-    <div class="form-row">
-      <label>สี</label>
-      <div style="display:flex;align-items:center;gap:12px">
-        <input type="color" id="zf-color" value="#c8e6c9" style="width:48px;height:40px;border:none;cursor:pointer;border-radius:8px">
-        <span style="font-size:0.85rem;color:#666">กดเพื่อเลือกสี</span>
-      </div>
-    </div>
-    <div class="form-row">
-      <label>เชื่อมกับแปลง <span style="color:#aaa;font-size:0.8rem">(คลิกบนผังเพื่อดูแปลงนั้นได้)</span></label>
-      <select id="zf-plot">
-        <option value="">ไม่เชื่อม</option>
-      </select>
-    </div>
-    <div class="form-actions">
-      <button type="button" class="btn-cancel" onclick="closeZoneModal()">ยกเลิก</button>
-      <button type="button" class="btn-save"   onclick="saveZoneEdit()">บันทึก</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: ข้อมูลช่อง -->
-<div id="cell-info-modal" class="modal-overlay" onclick="closeCellInfo(event)">
-  <div class="modal" style="max-width:320px">
-    <h2 id="ci-title"></h2>
-    <div id="ci-body"></div>
-    <div class="form-actions" style="margin-top:16px">
-      <button type="button" class="btn-cancel" onclick="closeCellInfo()">ปิด</button>
-    </div>
   </div>
 </div>
 
