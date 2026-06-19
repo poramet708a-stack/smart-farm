@@ -156,6 +156,45 @@ tr:hover td { background: #fafafa; }
 .plot-btn.done   { border-color: #bdbdbd; color: #888; }
 .plot-btn.done.active { background: #616161; border-color: #616161; color: #fff; }
 
+/* Harvested plot list cards in เก็บเกี่ยว tab */
+.hrv-done-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.hrv-done-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.1); border-color: #a5d6a7; }
+.hrv-done-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+.hrv-done-name  { font-size: 1rem; font-weight: 700; color: #1b5e20; }
+.hrv-done-crop  { font-size: 0.8rem; color: #888; margin-left: 6px; }
+.hrv-done-arrow { font-size: 1.4rem; color: #aaa; line-height: 1; }
+.hrv-done-stats { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.85rem; color: #555; }
+
+/* Back button */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: 1px solid #c8e6c9;
+  border-radius: 20px;
+  background: #fff;
+  color: #2e7d32;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
+.btn-back:hover { background: #e8f5e9; }
+
 .btn-new-plot {
   padding: 8px 16px;
   background: #2e7d32;

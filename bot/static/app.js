@@ -302,25 +302,189 @@ async function renderHarvest() {
     }).join('');
   }
 
-  // Done sessions table
-  const tbody = document.querySelector('#harvest-done-table tbody');
-  tbody.innerHTML = '';
-  if (!done.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:24px">ยังไม่มีรอบที่เสร็จแล้ว</td></tr>';
+  // Harvested plots list
+  renderHarvestDoneList();
+}
+
+function renderHarvestDoneList() {
+  const section = document.getElementById('harvest-done-section');
+  if (!section) return;
+
+  const harvestedPlots = allPlots.filter(p => p.status === 'เก็บเกี่ยวแล้ว');
+
+  let html = `<div class="page-action-bar" style="margin-top:20px">
+    <span class="page-action-title">✅ แปลงที่เก็บเกี่ยวแล้ว</span>
+  </div>`;
+
+  if (!harvestedPlots.length) {
+    html += '<p style="color:#aaa;text-align:center;padding:24px">ยังไม่มีแปลงที่เก็บเกี่ยวแล้ว</p>';
   } else {
-    done.forEach(s => {
-      const plot = allPlots.find(p => p.plot_id === s.plot_id);
-      const tr   = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${plot?.plot_name || s.plot_id}</td>
-        <td>${s.end_date || '—'}</td>
-        <td>${fmt(s.total_kg)} กก.</td>
-        <td class="amt-inc">${fmt(s.total_revenue)} ฿</td>
-        <td>${s.destination_type || '—'}${s.destination_detail ? ' · '+s.destination_detail : ''}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+    html += harvestedPlots.map(plot => {
+      const sessions = allHarvestSessions.filter(s => s.plot_id === plot.plot_id && s.status === 'เสร็จแล้ว');
+      const totalKg  = sessions.reduce((s, h) => s + parseFloat(h.total_kg || 0), 0);
+      const totalRev = sessions.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
+      const txns     = allTransactions.filter(r => r.plot_id === plot.plot_id);
+      const expense  = sum(txns, 'รายจ่าย');
+      const profit   = totalRev - expense;
+      const roi      = expense > 0 ? Math.round(profit/expense*100) : 0;
+      const roiColor = roi >= 0 ? '#2e7d32' : '#c62828';
+      return `<div class="hrv-done-card" onclick="showHarvestedPlot('${plot.plot_id}')">
+        <div class="hrv-done-head">
+          <div>
+            <span class="hrv-done-name">${plot.plot_name}</span>
+            <span class="hrv-done-crop">${plot.crop_type} · ${plot.area_rai} ไร่</span>
+          </div>
+          <span class="hrv-done-arrow">›</span>
+        </div>
+        <div class="hrv-done-stats">
+          <span>🌾 ${fmt(totalKg)} กก.</span>
+          <span>💰 ${fmt(totalRev)} ฿</span>
+          <span>💸 ต้นทุน ${fmt(expense)} ฿</span>
+          <span style="color:${roiColor};font-weight:700">${roi>=0?'📈':'📉'} ROI ${roi>=0?'+':''}${roi}%</span>
+        </div>
+      </div>`;
+    }).join('');
   }
+  section.innerHTML = html;
+}
+
+let harvestDetailPlotId = null;
+
+async function showHarvestedPlot(plotId) {
+  harvestDetailPlotId = plotId;
+  if (!allSeasonLogs.length) {
+    try { allSeasonLogs = await fetch(`${API}/api/season-logs`).then(r => r.json()); }
+    catch { allSeasonLogs = []; }
+  }
+  renderHarvestedDetail(plotId);
+}
+
+function backToHarvestList() {
+  harvestDetailPlotId = null;
+  renderHarvestDoneList();
+}
+
+function renderHarvestedDetail(plotId) {
+  const section = document.getElementById('harvest-done-section');
+  if (!section) return;
+
+  const plot = allPlots.find(p => p.plot_id === plotId);
+  if (!plot) return;
+
+  const txns    = allTransactions.filter(r => r.plot_id === plotId);
+  const expense = sum(txns, 'รายจ่าย');
+  const income  = sum(txns, 'รายรับ');
+  const area    = parseFloat(plot.area_rai) || 1;
+
+  const sessions = allHarvestSessions.filter(s => s.plot_id === plotId && s.status === 'เสร็จแล้ว');
+  const actualKg  = sessions.reduce((s, h) => s + parseFloat(h.total_kg || 0), 0);
+  const actualRev = sessions.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
+  const profit    = actualRev - expense;
+  const roi       = expense > 0 ? Math.round(profit/expense*100) : 0;
+
+  const catMap = {};
+  txns.filter(r => r.type === 'รายจ่าย').forEach(r => {
+    catMap[r.category] = (catMap[r.category] || 0) + parseFloat(r.amount || 0);
+  });
+  const catBars = Object.entries(catMap).sort((a,b) => b[1]-a[1]).map(([cat, val]) => {
+    const pct = expense > 0 ? Math.round(val/expense*100) : 0;
+    return `<div class="an-cat-row">
+      <span class="an-cat-name">${cat}</span>
+      <div class="an-cat-bar-wrap"><div class="an-cat-bar" style="width:${pct}%"></div></div>
+      <span class="an-cat-val">${fmt(val)} ฿ (${pct}%)</span>
+    </div>`;
+  }).join('') || '<p style="color:#aaa;font-size:0.85rem">ยังไม่มีรายจ่าย</p>';
+
+  const txnRows = [...txns].reverse().map(r => {
+    const isInc = r.type === 'รายรับ';
+    const notes = r.notes || '';
+    return `<tr class="${isInc?'row-income':'row-expense'}">
+      <td>${(r.date||'').slice(0,10)}</td>
+      <td><span class="type-badge ${isInc?'inc':'exp'}">${isInc?'+ รับ':'− จ่าย'}</span></td>
+      <td>${r.category}</td>
+      <td class="amt-cell ${isInc?'amt-inc':'amt-exp'}">${isInc?'+':'−'}${fmt(r.amount)} ฿</td>
+      <td class="notes-cell">
+        ${notes ? `<span class="txn-notes">${notes}</span>` : '<span style="color:#ccc">—</span>'}
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:#aaa;padding:16px">ไม่มีรายการ</td></tr>';
+
+  const logs = allSeasonLogs.filter(l => l.plot_id === plotId);
+  const logCards = logs.map(l => {
+    const rev = parseFloat(l.yield_kg||0) * parseFloat(l.price_per_kg||0);
+    const problems = l.problems ? l.problems.split(',').filter(Boolean)
+      .map(pr => `<span class="prob-tag">${pr.trim()}</span>`).join('') : '—';
+    return `<div class="sl-card">
+      <div class="sl-card-head">
+        <strong>${l.season_name}</strong>
+        <span style="color:#888;font-size:0.8rem">${l.start_date}${l.end_date?' → '+l.end_date:''}</span>
+      </div>
+      <div class="sl-grid">
+        <div class="sl-stat"><div class="sl-stat-l">🌾 ผลผลิต</div><strong>${fmt(l.yield_kg||0)} กก.</strong></div>
+        <div class="sl-stat"><div class="sl-stat-l">💰 รายได้</div><strong class="amt-inc">${fmt(rev)} ฿</strong></div>
+        <div class="sl-stat"><div class="sl-stat-l">💊 ปุ๋ย</div><strong>${fmt(l.fertilizer_cost||0)} ฿</strong></div>
+        <div class="sl-stat"><div class="sl-stat-l">🧪 ยา</div><strong>${fmt(l.pesticide_cost||0)} ฿</strong></div>
+        <div class="sl-stat"><div class="sl-stat-l">💧 รดน้ำ</div><strong>${l.water_count||0} ครั้ง</strong></div>
+        <div class="sl-stat"><div class="sl-stat-l">🌧️ ฝน</div><strong>${l.rain_count||0} ครั้ง</strong></div>
+      </div>
+      <div style="margin-top:8px"><span style="font-size:0.8rem;color:#888">ปัญหา: </span>${problems}</div>
+      ${l.notes ? `<div class="sl-notes">"${l.notes}"</div>` : ''}
+    </div>`;
+  }).join('') || '<p style="color:#aaa;font-size:0.85rem">ไม่มีบันทึกฤดูกาล</p>';
+
+  const sessionCards = sessions.map(s => `
+    <div class="sl-card" style="background:#f9f9f9">
+      <div class="sl-card-head">
+        <strong>${s.start_date} → ${s.end_date || '?'}</strong>
+        <span style="color:#2e7d32;font-weight:700">${fmt(s.total_kg)} กก. · ${fmt(s.total_revenue)} ฿</span>
+      </div>
+      <div style="font-size:0.85rem;color:#888;margin-top:4px">
+        ${s.destination_type||''}${s.destination_detail?' · '+s.destination_detail:''}
+      </div>
+    </div>`).join('') || '<p style="color:#aaa;font-size:0.85rem">ไม่มีข้อมูล</p>';
+
+  section.innerHTML = `
+    <button class="btn-back" onclick="backToHarvestList()">‹ กลับ</button>
+    <div class="an-plot-header" style="margin-top:12px">
+      <span class="an-plot-title">🌿 ${plot.plot_name} · ${plot.crop_type} · ${area} ไร่</span>
+      <span class="an-plot-status done">✅ เก็บเกี่ยวแล้ว</span>
+    </div>
+    <div class="cards" style="margin-bottom:8px">
+      <div class="card expense"><div class="label">💸 ต้นทุนรวม</div><div class="value">${fmt(expense)} ฿</div></div>
+      <div class="card"><div class="label">🌾 ผลผลิต</div><div class="value" style="font-size:1rem">${fmt(actualKg)} กก.</div></div>
+      <div class="card income"><div class="label">💰 รายได้รวม</div><div class="value">${fmt(actualRev)} ฿</div></div>
+      <div class="card ${profit>=0?'profit':'expense'}">
+        <div class="label">${profit>=0?'✅ กำไร':'❌ ขาดทุน'}</div>
+        <div class="value">${profit>=0?'+':''}${fmt(profit)} ฿</div>
+      </div>
+    </div>
+    <div class="cards" style="margin-bottom:16px">
+      <div class="card"><div class="label">💸/ไร่</div><div class="value" style="font-size:1rem">${fmt(expense/area)} ฿</div></div>
+      <div class="card"><div class="label">📊 ROI</div><div class="value" style="font-size:1rem;color:${roi>=0?'#2e7d32':'#c62828'}">${roi>=0?'+':''}${roi}%</div></div>
+      <div class="card"><div class="label">📅 เริ่มปลูก</div><div class="value" style="font-size:0.9rem">${plot.start_date||'—'}</div></div>
+    </div>
+    <div class="an-section">
+      <div class="an-section-title">🚜 รายละเอียดการเก็บเกี่ยว</div>
+      ${sessionCards}
+    </div>
+    <div class="an-section">
+      <div class="an-section-title">💸 ต้นทุนแยกหมวด</div>
+      ${catBars}
+    </div>
+    <div class="an-section">
+      <div class="an-section-title">📝 รายการทั้งหมด</div>
+      <div class="table-wrap" style="margin-top:10px">
+        <table>
+          <thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวด</th><th>ยอด</th><th>เหตุผล</th></tr></thead>
+          <tbody>${txnRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="an-section">
+      <div class="an-section-title">📓 บันทึกฤดูกาล</div>
+      ${logCards}
+    </div>
+  `;
 }
 
 // ── Harvest Session Modal ──────────────────────────────────
@@ -425,8 +589,10 @@ async function submitCloseSession(e) {
 }
 
 async function reloadHarvest() {
-  allHarvestSessions = [];
-  allHarvestEntries  = [];
+  allHarvestSessions  = [];
+  allHarvestEntries   = [];
+  allSeasonLogs       = [];
+  harvestDetailPlotId = null;
   allPlots = await fetch(`${API}/api/plots`).then(r => r.json()).catch(() => allPlots);
   await renderHarvest();
   renderOverview();
@@ -514,14 +680,14 @@ async function renderPlotsPage(plotId) {
 
   const container = document.getElementById('plot-content');
 
-  // Build selector — ALL plots: active = green, harvested = grey
+  // Build selector — active plots only (harvested plots live in เก็บเกี่ยว tab)
+  const active = activePlots();
   const btnContainer = document.getElementById('plot-buttons');
   if (btnContainer) {
-    btnContainer.innerHTML = allPlots.map(p => {
-      const done = p.status === 'เก็บเกี่ยวแล้ว';
-      return `<button class="plot-btn${done ? ' done' : ''}${p.plot_id === plotId ? ' active' : ''}"
-               onclick="selectPlot('${p.plot_id}')">${p.plot_name}${done ? ' ✅' : ''}</button>`;
-    }).join('');
+    btnContainer.innerHTML = active.map(p =>
+      `<button class="plot-btn${p.plot_id === plotId ? ' active' : ''}"
+               onclick="selectPlot('${p.plot_id}')">${p.plot_name}</button>`
+    ).join('');
   }
 
   if (!plotId) {
@@ -536,7 +702,6 @@ async function renderPlotsPage(plotId) {
   const expense = sum(txns, 'รายจ่าย');
   const income  = sum(txns, 'รายรับ');
   const area    = parseFloat(plot.area_rai) || 1;
-  const isDone  = plot.status === 'เก็บเกี่ยวแล้ว';
 
   // Cost breakdown bars
   const catMap = {};
@@ -595,70 +760,7 @@ async function renderPlotsPage(plotId) {
     </div>`;
   }).join('') || `<p style="color:#aaa;font-size:0.85rem;padding:8px 0">ยังไม่มีบันทึก</p>`;
 
-  if (isDone) {
-    // ─── HARVESTED PLOT: historical analysis ───────────────────────────────
-    const sessions = allHarvestSessions.filter(s => s.plot_id === plotId && s.status === 'เสร็จแล้ว');
-    const actualKg  = sessions.reduce((s, h) => s + parseFloat(h.total_kg || 0), 0);
-    const actualRev = sessions.reduce((s, h) => s + parseFloat(h.total_revenue || 0), 0);
-    const profit    = actualRev - expense;
-    const roi       = expense > 0 ? Math.round(profit/expense*100) : 0;
-
-    const sessionCards = sessions.length
-      ? sessions.map(s => `
-          <div class="sl-card" style="background:#f9f9f9">
-            <div class="sl-card-head">
-              <strong>${s.start_date} → ${s.end_date || '?'}</strong>
-              <span style="color:#2e7d32;font-weight:700">${fmt(s.total_kg)} กก. · ${fmt(s.total_revenue)} ฿</span>
-            </div>
-            <div style="font-size:0.85rem;color:#888;margin-top:4px">
-              ${s.destination_type || ''}${s.destination_detail ? ' · '+s.destination_detail : ''}
-            </div>
-          </div>`).join('')
-      : '<p style="color:#aaa;font-size:0.85rem">ไม่มีข้อมูลการเก็บเกี่ยว</p>';
-
-    container.innerHTML = `
-      <div class="an-plot-header">
-        <span class="an-plot-title">🌿 ${plot.plot_name} · ${plot.crop_type} · ${area} ไร่</span>
-        <span class="an-plot-status done">✅ เก็บเกี่ยวแล้ว</span>
-      </div>
-      <div class="cards" style="margin-bottom:8px">
-        <div class="card expense"><div class="label">💸 ต้นทุนรวม</div><div class="value">${fmt(expense)} ฿</div></div>
-        <div class="card"><div class="label">🌾 ผลผลิต</div><div class="value" style="font-size:1rem">${fmt(actualKg)} กก.</div></div>
-        <div class="card income"><div class="label">💰 รายได้รวม</div><div class="value">${fmt(actualRev)} ฿</div></div>
-        <div class="card ${profit>=0?'profit':'expense'}">
-          <div class="label">${profit>=0?'✅ กำไร':'❌ ขาดทุน'}</div>
-          <div class="value">${profit>=0?'+':''}${fmt(profit)} ฿</div>
-        </div>
-      </div>
-      <div class="cards" style="margin-bottom:16px">
-        <div class="card"><div class="label">💸/ไร่</div><div class="value" style="font-size:1rem">${fmt(expense/area)} ฿</div></div>
-        <div class="card"><div class="label">📊 ROI</div><div class="value" style="font-size:1rem;color:${roi>=0?'#2e7d32':'#c62828'}">${roi>=0?'+':''}${roi}%</div></div>
-        <div class="card"><div class="label">📅 เริ่มปลูก</div><div class="value" style="font-size:0.9rem">${plot.start_date||'—'}</div></div>
-      </div>
-      <div class="an-section">
-        <div class="an-section-title">🚜 รายละเอียดการเก็บเกี่ยว</div>
-        ${sessionCards}
-      </div>
-      <div class="an-section">
-        <div class="an-section-title">💸 ต้นทุนแยกหมวด</div>
-        ${catBars}
-      </div>
-      <div class="an-section">
-        <div class="an-section-title">📝 รายการทั้งหมด</div>
-        <div class="table-wrap" style="margin-top:10px">
-          <table>
-            <thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวด</th><th>ยอด</th><th>เหตุผล</th><th></th></tr></thead>
-            <tbody>${txnRows}</tbody>
-          </table>
-        </div>
-      </div>
-      <div class="an-section">
-        <div class="an-section-title">📓 บันทึกฤดูกาล</div>
-        ${logCards}
-      </div>
-    `;
-  } else {
-    // ─── ACTIVE PLOT: current status + management ──────────────────────────
+  {
     const { kg: estKg, price: estPrice } = yieldData(plotId);
     container.innerHTML = `
       <div class="an-plot-header">
@@ -726,7 +828,7 @@ async function renderPlotsPage(plotId) {
       </div>
     `;
   }
-}
+}   // end renderPlotsPage
 
 function selectPlot(plotId) {
   currentPlotId = plotId;
