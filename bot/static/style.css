@@ -317,6 +317,21 @@ tr:hover td { background: #fafafa; }
   gap: 12px;
   flex-wrap: wrap;
 }
+.cal-status-chips { display: flex; gap: 6px; }
+.cal-chip {
+  padding: 6px 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 20px;
+  background: #fff;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #555;
+}
+.cal-chip:hover  { border-color: #2e7d32; color: #2e7d32; }
+.cal-chip.active { background: #2e7d32; border-color: #2e7d32; color: #fff; font-weight: 600; }
+
 .cal-plot-sel {
   padding: 8px 12px;
   border: 1px solid #ddd;

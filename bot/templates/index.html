@@ -125,6 +125,11 @@
   <!-- Page 4: Calendar -->
   <section id="page-calendar" class="page">
     <div class="cal-toolbar">
+      <div class="cal-status-chips">
+        <button class="cal-chip active" data-status="all"       onclick="setCalStatus('all')">ทั้งหมด</button>
+        <button class="cal-chip"        data-status="active"    onclick="setCalStatus('active')">กำลังปลูก</button>
+        <button class="cal-chip"        data-status="harvested" onclick="setCalStatus('harvested')">เก็บเกี่ยวแล้ว</button>
+      </div>
       <select id="cal-plot-filter" class="cal-plot-sel">
         <option value="">ทุกแปลง</option>
       </select>

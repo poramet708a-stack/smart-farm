@@ -20,10 +20,11 @@ const MONTH_TH     = ['มกราคม','กุมภาพันธ์','ม
 const DAY_TH       = ['อา','จ','อ','พ','พฤ','ศ','ส'];
 
 // calendar state
-let calYear        = new Date().getFullYear();
-let calMonth       = new Date().getMonth();
-let calPlotFilter  = '';
-let currentDayDate = null;
+let calYear         = new Date().getFullYear();
+let calMonth        = new Date().getMonth();
+let calPlotFilter   = '';
+let calStatusFilter = 'all';   // 'all' | 'active' | 'harvested'
+let currentDayDate  = null;
 
 // plot modal state
 let editingPlotId  = null;
@@ -1001,10 +1002,29 @@ async function saveYieldEstimates() {
 // ---------------------------------------------------------------------------
 // Page 5: Calendar
 // ---------------------------------------------------------------------------
+function setCalStatus(status) {
+  calStatusFilter = status;
+  calPlotFilter   = '';
+  renderCalendarPage();
+}
+
+function _calFilteredPlots() {
+  if (calStatusFilter === 'active')    return allPlots.filter(p => p.status !== 'เก็บเกี่ยวแล้ว');
+  if (calStatusFilter === 'harvested') return allPlots.filter(p => p.status === 'เก็บเกี่ยวแล้ว');
+  return allPlots;
+}
+
 function renderCalendarPage() {
-  const sel = document.getElementById('cal-plot-filter');
+  // sync chip active state
+  document.querySelectorAll('.cal-chip').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.status === calStatusFilter)
+  );
+
+  // populate plot dropdown filtered by status
+  const plots = _calFilteredPlots();
+  const sel   = document.getElementById('cal-plot-filter');
   sel.innerHTML = '<option value="">ทุกแปลง</option>' +
-    allPlots.map(p => `<option value="${p.plot_id}">${p.plot_name}</option>`).join('');
+    plots.map(p => `<option value="${p.plot_id}"${p.plot_id === calPlotFilter ? ' selected' : ''}>${p.plot_name}</option>`).join('');
   sel.value    = calPlotFilter;
   sel.onchange = () => { calPlotFilter = sel.value; renderCalendar(); };
   renderCalendar();
@@ -1031,10 +1051,12 @@ function renderCalendar() {
   for (let i = 0; i < firstDay; i++)
     grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day other-month' }));
 
-  const txns = allTransactions.filter(r => {
-    return (r.date || '').startsWith(monthStr) &&
-           (!calPlotFilter || r.plot_id === calPlotFilter);
-  });
+  const allowedIds = calPlotFilter
+    ? new Set([calPlotFilter])
+    : new Set(_calFilteredPlots().map(p => p.plot_id));
+  const txns = allTransactions.filter(r =>
+    (r.date || '').startsWith(monthStr) && allowedIds.has(String(r.plot_id))
+  );
   const dayMap = {};
   txns.forEach(r => {
     const d = (r.date || '').slice(0, 10);
