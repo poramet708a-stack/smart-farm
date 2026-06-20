@@ -649,7 +649,40 @@ function openSeasonLogModal(plotId) {
   document.getElementById('sl-plot').innerHTML =
     allPlots.map(p => `<option value="${p.plot_id}"${p.plot_id===plotId?' selected':''}>${p.plot_name}</option>`).join('');
   document.querySelectorAll('#sl-problem-tags input').forEach(cb => cb.checked = false);
+  _fillSeasonCosts();
+  document.getElementById('sl-plot').onchange  = _fillSeasonCosts;
+  document.getElementById('sl-start').onchange = _fillSeasonCosts;
+  document.getElementById('sl-end').onchange   = _fillSeasonCosts;
   document.getElementById('season-modal').classList.add('open');
+}
+
+function _fillSeasonCosts() {
+  const plotId = document.getElementById('sl-plot').value;
+  const start  = document.getElementById('sl-start').value;
+  const end    = document.getElementById('sl-end').value;
+
+  const rel = allTransactions.filter(t => {
+    if (String(t.plot_id) !== String(plotId) || t.type !== 'รายจ่าย') return false;
+    if (t.category !== 'ค่าปุ๋ย' && t.category !== 'ค่ายา') return false;
+    const d = (t.date || '').slice(0, 10);
+    if (start && d < start) return false;
+    if (end   && d > end)   return false;
+    return true;
+  });
+
+  const fertTxns = rel.filter(t => t.category === 'ค่าปุ๋ย');
+  const pestTxns = rel.filter(t => t.category === 'ค่ายา');
+  const fert = fertTxns.reduce((s, t) => s + Number(t.amount), 0);
+  const pest = pestTxns.reduce((s, t) => s + Number(t.amount), 0);
+
+  document.getElementById('sl-fert').value = fert || '';
+  document.getElementById('sl-pest').value = pest || '';
+
+  const range = start || end ? `ช่วง${start ? ' '+start : ''}${end ? ' – '+end : ''}` : 'ทั้งหมด';
+  document.getElementById('sl-fert-hint').textContent =
+    fertTxns.length ? `📊 รวมจาก ${fertTxns.length} รายการ (${range})` : '';
+  document.getElementById('sl-pest-hint').textContent =
+    pestTxns.length ? `📊 รวมจาก ${pestTxns.length} รายการ (${range})` : '';
 }
 
 async function submitSeasonLog(e) {

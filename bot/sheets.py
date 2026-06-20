@@ -88,22 +88,25 @@ def save_transaction(
     ])
     logger.info(f'บันทึก {txn_id}: {txn_type} {amount} บาท แปลง {plot_id}')
     if txn_type == 'รายจ่าย' and category in ('ค่าปุ๋ย', 'ค่ายา'):
-        _sync_season_log_cost(plot_id, category, amount)
+        txn_day = (date or datetime.now().strftime('%Y-%m-%d'))[:10]
+        _sync_season_log_cost(plot_id, category, amount, txn_day)
     return txn_id
 
 
-def _sync_season_log_cost(plot_id: str, category: str, amount: float):
-    """บวกค่าปุ๋ย/ค่ายาเข้า season log ที่ active อยู่ของแปลงนั้น"""
-    today = datetime.now().date().isoformat()
-    ws    = _ensure_sheet('season_log', _SL_HDR)
-    rows  = ws.get_all_records()
+def _sync_season_log_cost(plot_id: str, category: str, amount: float, txn_day: str):
+    """บวกค่าปุ๋ย/ค่ายาเข้า season log ที่ txn_day อยู่ในช่วงของแปลงนั้น"""
+    ws   = _ensure_sheet('season_log', _SL_HDR)
+    rows = ws.get_all_records()
     for i, row in enumerate(rows, start=2):
         if str(row.get('plot_id')) != str(plot_id):
             continue
-        end = str(row.get('end_date', ''))
-        if end and end < today:          # season จบแล้ว ข้าม
+        start = str(row.get('start_date', ''))
+        end   = str(row.get('end_date',   ''))
+        if start and txn_day < start:   # ก่อนฤดูนี้
             continue
-        # พบ active season log
+        if end and txn_day > end:       # หลังฤดูนี้จบแล้ว
+            continue
+        # พบ season log ที่ตรงช่วงเวลา
         if category == 'ค่าปุ๋ย':
             col     = _SL_HDR.index('fertilizer_cost') + 1
             current = float(row.get('fertilizer_cost') or 0)
@@ -111,7 +114,7 @@ def _sync_season_log_cost(plot_id: str, category: str, amount: float):
             col     = _SL_HDR.index('pesticide_cost') + 1
             current = float(row.get('pesticide_cost') or 0)
         ws.update_cell(i, col, current + amount)
-        logger.info(f'sync season_log {row["log_id"]}: {category} +{amount}')
+        logger.info(f'sync season_log {row["log_id"]}: {category} +{amount} (txn {txn_day})')
         break
 
 

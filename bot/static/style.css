@@ -638,6 +638,10 @@ tr:hover td { background: #fafafa; }
 /* ===== Season Log ===== */
 .sl-plot-block { margin-bottom: 24px; }
 .sl-plot-title { font-weight: 700; font-size: 1rem; color: #2e7d32; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #e8f5e9; }
+.sl-input-wrap { display: flex; flex-direction: column; flex: 1; }
+.sl-input-wrap input { width: 100%; }
+.sl-auto-hint { color: #2e7d32; font-size: 0.72rem; margin-top: 3px; }
+
 .sl-card {
   background: #fff;
   border-radius: 12px;
