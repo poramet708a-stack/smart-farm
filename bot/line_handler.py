@@ -158,6 +158,22 @@ def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: 
             _reply(api, token, "เลือกแปลงจากปุ่มได้เลยครับ", _qr(*labels))
         return
 
+    # Step: เลือกแปลงสำหรับสรุป
+    if step == 'waiting_summary_plot':
+        plots = get_plots()
+        if text in ('📊 ทุกแปลง', 'ทุกแปลง'):
+            user_states.pop(user_id, None)
+            _reply(api, token, _format_summary())
+        else:
+            matched = next((p for p in plots if p['plot_name'] == text), None)
+            if matched:
+                user_states.pop(user_id, None)
+                _reply(api, token, _format_summary(matched['plot_name']))
+            else:
+                _reply(api, token, "เลือกแปลงที่ต้องการสรุปครับ",
+                       _qr('📊 ทุกแปลง', *[p['plot_name'] for p in plots][:12]))
+        return
+
     # Step: ยืนยัน / ยกเลิก
     if step == 'waiting_confirm':
         if 'ยืนยัน' in text:
@@ -177,6 +193,14 @@ def _handle_text(event, api: MessagingApi, user_id: str, source_id: str, token: 
             _reply(api, token, "❌ ยกเลิกแล้วครับ")
         else:
             _reply(api, token, "เลือกได้เลยครับ", _qr('✅ ยืนยัน', '❌ ยกเลิก'))
+        return
+
+    # สรุป (ไม่มีชื่อแปลง) → แสดงตัวเลือก
+    if text == 'สรุป':
+        plots = get_plots()
+        user_states[user_id] = {'step': 'waiting_summary_plot'}
+        _reply(api, token, "สรุปอะไรดีครับ?",
+               _qr('📊 ทุกแปลง', *[p['plot_name'] for p in plots][:12]))
         return
 
     # ไม่มี state — ลอง parse คำสั่งปกติ
@@ -228,6 +252,19 @@ def handle_postback(event, api: MessagingApi):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _format_summary(plot_name: str | None = None) -> str:
+    from bot.sheets import get_summary
+    data  = get_summary(plot_name)
+    label = plot_name if plot_name else 'ทุกแปลง'
+    ico   = '✅' if data['profit'] >= 0 else '⚠️'
+    return (
+        f"📊 สรุปเดือนนี้ — {label}\n"
+        f"💰 รายรับ:  {data['income']:>10,.0f} บาท\n"
+        f"💸 รายจ่าย: {data['expense']:>10,.0f} บาท\n"
+        f"{ico} กำไร:    {data['profit']:>10,.0f} บาท"
+    )
+
 
 def _parse_amount_from_text(text: str) -> float | None:
     import re
