@@ -87,7 +87,32 @@ def save_transaction(
         plot_id, '', recorded_by, notes,
     ])
     logger.info(f'บันทึก {txn_id}: {txn_type} {amount} บาท แปลง {plot_id}')
+    if txn_type == 'รายจ่าย' and category in ('ค่าปุ๋ย', 'ค่ายา'):
+        _sync_season_log_cost(plot_id, category, amount)
     return txn_id
+
+
+def _sync_season_log_cost(plot_id: str, category: str, amount: float):
+    """บวกค่าปุ๋ย/ค่ายาเข้า season log ที่ active อยู่ของแปลงนั้น"""
+    today = datetime.now().date().isoformat()
+    ws    = _ensure_sheet('season_log', _SL_HDR)
+    rows  = ws.get_all_records()
+    for i, row in enumerate(rows, start=2):
+        if str(row.get('plot_id')) != str(plot_id):
+            continue
+        end = str(row.get('end_date', ''))
+        if end and end < today:          # season จบแล้ว ข้าม
+            continue
+        # พบ active season log
+        if category == 'ค่าปุ๋ย':
+            col     = _SL_HDR.index('fertilizer_cost') + 1
+            current = float(row.get('fertilizer_cost') or 0)
+        else:
+            col     = _SL_HDR.index('pesticide_cost') + 1
+            current = float(row.get('pesticide_cost') or 0)
+        ws.update_cell(i, col, current + amount)
+        logger.info(f'sync season_log {row["log_id"]}: {category} +{amount}')
+        break
 
 
 def update_transaction_notes(txn_id: str, notes: str):

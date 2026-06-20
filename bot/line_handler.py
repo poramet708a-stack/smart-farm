@@ -18,7 +18,7 @@ APPROVER_USER_ID = os.environ.get('LINE_APPROVER_USER_ID', '')
 # In-memory conversation state per user_id
 user_states: dict[str, dict] = {}
 
-EXPENSE_CATEGORIES = ['ค่าปุ๋ย', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ']
+EXPENSE_CATEGORIES = ['ค่าปุ๋ย', 'ค่ายา', 'ค่าเมล็ด', 'ค่าน้ำมัน', 'ค่าซ่อม', 'ค่าแรง', 'อื่นๆ']
 INCOME_CATEGORIES  = ['ขายข้าว', 'ขายมัน', 'ขายข้าวโพด', 'อื่นๆ']
 ALL_CATEGORIES     = EXPENSE_CATEGORIES + INCOME_CATEGORIES
 
