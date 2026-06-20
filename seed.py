@@ -15,10 +15,42 @@ from bot.sheets import (
     save_plot, update_plot, save_transaction,
     create_harvest_session, add_harvest_entry, close_harvest_session,
     save_season_log, save_yield_estimates, save_activity,
+    _sheet, _ensure_sheet,
+    _HSS_HDR, _HEN_HDR, _SL_HDR,
 )
 
 def sep(label): print(f'\n{"─"*50}\n  {label}\n{"─"*50}')
 def ok(msg):    print(f'  ✅  {msg}')
+
+# ════════════════════════════════════════════════════════
+#  0. ล้างข้อมูลเก่า (เหลือแต่ header)
+# ════════════════════════════════════════════════════════
+sep('0. ล้างข้อมูลเก่า')
+
+SHEETS_TO_CLEAR = [
+    ('plots',            ['plot_id','plot_name','crop_type','area_rai','start_date','expected_harvest','status','notes']),
+    ('transactions',     ['txn_id','date','type','category','amount','plot_id','image_id','recorded_by','notes']),
+    ('harvest',          ['harvest_id','plot_id','date','quantity_kg','price_per_kg','total','buyer','notes']),
+    ('harvest_sessions', _HSS_HDR),
+    ('harvest_entries',  _HEN_HDR),
+    ('season_log',       _SL_HDR),
+    ('activities',       ['date','note']),
+    ('config',           ['key','value']),
+]
+
+for sheet_name, headers in SHEETS_TO_CLEAR:
+    try:
+        ws = _ensure_sheet(sheet_name, headers)
+        all_rows = ws.get_all_values()
+        if len(all_rows) > 1:
+            ws.delete_rows(2, len(all_rows))   # ลบแถวข้อมูลทั้งหมด เหลือ header
+            ok(f'ล้าง {sheet_name} ({len(all_rows)-1} แถว)')
+        else:
+            ok(f'{sheet_name} ว่างอยู่แล้ว')
+        time.sleep(0.6)
+    except Exception as e:
+        print(f'  ⚠️  {sheet_name}: {e}')
+
 
 # ════════════════════════════════════════════════════════
 #  1. แปลง (4 แปลง)
